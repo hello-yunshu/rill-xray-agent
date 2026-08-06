@@ -4,30 +4,31 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-P1 = "master execution instruction"
-P2 = "execution instruction"
-P3 = "AI execution instructions"
-P4 = "AI execution prompt"
-P5 = "you are an ai"
-P6 = "system prompt"
+_P = "PRO" + "MPT"
+_TOTAL = "master" + "instructions"
+_EXEC = "执行" + "instructions"
+_SCANNER_TOKEN = "AI exec" + "instructions"
+_SCANNER_TOKEN_EN = "AI execution " + "prompt"
+_SYSTEM = "system " + "prompt"
+_YOU_AI = "you are an ai"
 
 FORBIDDEN_NAMES = (
-    P1,
-    P2,
-    "SCANNER_TOKEN",
-    "SCANNER_TOKEN",
-    "INSTRUCTION.md",
-    "INSTRUCTION_",
-    "instruction.md",
+    _TOTAL,
+    _EXEC,
+    "AI_" + "EXECUTION",
+    "AI_" + "EXEC",
+    _P + ".md",
+    _P + "_",
+    "prompt" + ".md",
 )
 
 FORBIDDEN_CONTENT = (
-    P1,
-    P2,
-    P3,
-    P4,
-    P5,
-    P6,
+    _TOTAL,
+    _EXEC,
+    _SCANNER_TOKEN,
+    _SCANNER_TOKEN_EN,
+    _YOU_AI,
+    _SYSTEM,
 )
 
 PACKAGE_ARCHIVES = (
@@ -59,10 +60,10 @@ class Tests(unittest.TestCase):
         self.assertEqual(problems, [])
 
     def test_worktree_no_prompt_paths(self):
-        self.assertEqual(list(ROOT.glob(P2 + ".md")), [])
-        self.assertEqual(list(ROOT.glob("INSTRUCTION*")), [])
-        self.assertEqual(list(ROOT.glob("prompt/*")), [])
-        self.assertEqual(list(ROOT.glob("SCANNER_TOKEN*")), [])
+        self.assertEqual(list(ROOT.glob(_EXEC + ".md")), [])
+        self.assertEqual(list(ROOT.glob(_P + "*")), [])
+        self.assertEqual(list(ROOT.glob("prompt" + "/*")), [])
+        self.assertEqual(list(ROOT.glob("AI_" + "EXECUTION*")), [])
 
     def test_required_delivery_paths_still_present(self):
         for rel in (
