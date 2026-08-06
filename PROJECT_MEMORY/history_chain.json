@@ -9,6 +9,11 @@
       "path": "history/2026-08-06-source-process-qualified.md",
       "previousSha256": "55c0362f2baf7b9fec507be70d43e6f738cc71156a081776f5bf1b6082ca3855",
       "sha256": "6d2968dcb71efacba5a932d56b8e474286eb51d9ae98cb5020ba0e22d7b8e5c2"
+    },
+    {
+      "path": "history/2026-08-06-host-integration-and-rc.md",
+      "previousSha256": "6d2968dcb71efacba5a932d56b8e474286eb51d9ae98cb5020ba0e22d7b8e5c2",
+      "sha256": "08f13f049a8cab2130d7ac19e93b4428a35e6ca30911ebde6881d47313965b29"
     }
   ],
   "schemaVersion": 1
