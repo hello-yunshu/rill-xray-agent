@@ -13,10 +13,18 @@ def scan_transactions(root):
   if name not in TERMINAL:r['incomplete']+=1
   if name=='committed' and not (e/'commit-bundle.json').is_file():r['unsafe']+=1
  return r
-def health(state_root,txn_root,audit=None):
- tx=scan_transactions(txn_root);reasons=[]
- if tx['incomplete'] or tx['unsafe']:reasons.append('incomplete_or_unsafe_root_transaction')
- if audit:
-  try:audit.verify()
-  except Exception:reasons.append('audit_chain_invalid')
- status='recovery-required' if reasons else 'ready';return {'status':status,'canObserve':True,'canRecommend':not reasons,'canApply':False,'reasons':reasons,'rootTransactions':tx}
+def health(state_root, txn_root, audit=None, operations=None):
+    tx = scan_transactions(txn_root)
+    reasons = []
+    if tx['incomplete'] or tx['unsafe']:
+        reasons.append('incomplete_or_unsafe_root_transaction')
+    if audit:
+        try:
+            audit.verify()
+        except Exception:
+            reasons.append('audit_chain_invalid')
+    if operations is not None and operations.pending_count():
+        reasons.append('unfinished_operations')
+    status = 'recovery-required' if reasons else 'ready'
+    return {'status': status, 'canObserve': True, 'canRecommend': not reasons, 'canApply': False,
+            'reasons': reasons, 'rootTransactions': tx}

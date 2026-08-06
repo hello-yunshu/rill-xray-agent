@@ -19,6 +19,11 @@
       "path": "history/2026-08-06-joint-audit-release-blocked.md",
       "previousSha256": "08f13f049a8cab2130d7ac19e93b4428a35e6ca30911ebde6881d47313965b29",
       "sha256": "79ab3018f92ee2a2923a26b7bd4b2d0182fd98e413b348606a37a6758e2fbdf0"
+    },
+    {
+      "path": "history/2026-08-06-p0-2-audit-fix.md",
+      "previousSha256": "79ab3018f92ee2a2923a26b7bd4b2d0182fd98e413b348606a37a6758e2fbdf0",
+      "sha256": "89aaa0ce6b45bc01d14b5384a48bc93d0e536017d0a2f3ddd0d8153f4e901c3c"
     }
   ],
   "schemaVersion": 1
