@@ -25,6 +25,12 @@ else:
         "--rill-agent-safe-disable",
         "--rill-agent-verify",
         "--rill-agent-uninstall",
+        "rxa_reconfigure_enter() {",
+        "rxa_reconfigure_leave() {",
+        "rxa_uninstall_enter() {",
+        "rxa_uninstall_finish() {",
+        "rxa_rc=\\$?; reinstall_rollback_on_return",
+        "trap 'rxa_reconfigure_leave $?' RETURN",
     ):
         assert token in text, token
 print(json.dumps({"ok": True, "head": head, "postIntegration": args.post_integration}, sort_keys=True))

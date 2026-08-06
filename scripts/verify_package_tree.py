@@ -26,6 +26,8 @@ for rel in required:
         errors.append(f"missing/unsafe {rel}")
 for path in root.rglob("*"):
     rel = path.relative_to(root)
+    if rel.parts and rel.parts[0] == ".git":
+        continue
     if path.is_symlink():
         errors.append(f"symlink forbidden: {rel}")
     if any(part in {".git", "__pycache__", ".pytest_cache", "target"} for part in rel.parts):

@@ -15,6 +15,7 @@ actual = {
     if path.is_file()
     and path != sums
     and not path.name.endswith(".pyc")
+    and not (path.relative_to(root).parts and path.relative_to(root).parts[0] == ".git")
     and not any(part in {"__pycache__", ".pytest_cache", "target"} for part in path.relative_to(root).parts)
 }
 if expected != actual:

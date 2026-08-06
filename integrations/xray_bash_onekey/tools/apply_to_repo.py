@@ -22,6 +22,48 @@ else
     rxa_menu(){ echo 'Rill Xray Agent is not installed. Run the included bootstrap script.'; menu_pause; }
     rxa_dispatch(){ case "${1:-}" in status) printf '%s\n' '{"installed":false,"routeAssistEnabled":false,"boundedAutoAllowed":false}' ;; install) bash "${scripts_dir}/rill_xray_agent_bootstrap.sh" ;; *) return 66 ;; esac; }
 fi
+# Lifecycle coordination used by the host install/update/uninstall paths.
+# Every hook is non-fatal: it never changes the host transaction return code.
+rxa_reconfigure_enter() {
+    local cfg mode
+    cfg=${RILL_XRAY_AGENT_CONFIG:-/etc/rill-xray-agent/config.json}
+    command -v rxa_get >/dev/null 2>&1 || return 0
+    [[ -f "$cfg" ]] || return 0
+    mode=$(rxa_get mode 2>/dev/null || printf 'observe-only')
+    printf '%s' "$mode" >"${cfg}.prior-mode" 2>/dev/null || true
+    rxa_apply_mode observe-only >/dev/null 2>&1 || true
+}
+rxa_reconfigure_leave() {
+    local rc=${1:-1} cfg mode
+    cfg=${RILL_XRAY_AGENT_CONFIG:-/etc/rill-xray-agent/config.json}
+    mode=$(cat "${cfg}.prior-mode" 2>/dev/null || printf 'observe-only')
+    rm -f "${cfg}.prior-mode"
+    if [[ "$rc" == 0 ]] && rxa_host_healthy; then
+        rxa_apply_mode "$mode" >/dev/null 2>&1 || true
+        RILL_XRAY_AGENT_OUTPUT=/var/lib/rill-xray-agent-xray/status/xray-observation.json \
+            bash /etc/rill-xray-agent/scripts/rill_xray_agent_observe.py >/dev/null 2>&1 || true
+    fi
+    return 0
+}
+rxa_host_healthy() {
+    command -v systemctl >/dev/null 2>&1 || return 0
+    systemctl is-active --quiet xray 2>/dev/null && return 0
+    systemctl is-active --quiet nginx 2>/dev/null && return 0
+    return 1
+}
+rxa_uninstall_enter() {
+    command -v rxa_apply_mode >/dev/null 2>&1 || return 0
+    [[ -f /etc/rill-xray-agent/config.json ]] || return 0
+    rxa_apply_mode observe-only >/dev/null 2>&1 || true
+}
+rxa_uninstall_finish() {
+    local rc=${1:-1}
+    if [[ "$rc" != 0 ]]; then
+        echo 'Rill Xray Agent: host uninstall failed; agent diagnostics retained' >&2
+        return 0
+    fi
+    bash /etc/rill-xray-agent/scripts/rill_xray_agent_uninstall.sh --purge || true
+}
 # END RILL XRAY AGENT INTEGRATION'''
 
 
