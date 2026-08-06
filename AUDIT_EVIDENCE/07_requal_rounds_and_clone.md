@@ -19,9 +19,14 @@ host regression results.
 - `verify_repo.py --post-integration`: passed.
 - Local regression suites: update metadata 12/12, offline commands 39/39,
   version loading 6/6.
-- GitHub Actions: the PR-triggered `Rill Xray Agent` check passed;
-  push-triggered reruns were repeatedly aborted by the GitHub action
-  download outage ("Service Unavailable"), not by failures in code.
+- GitHub Actions: the `Rill Xray Agent` integration check passed on both
+  the PR-triggered run (31116831828) and the push-triggered run
+  (31116837525) for fc08e30; `security-regression` (update-sh metadata)
+  passed on fc08e30 — the same job failed on the pre-fix commit
+  d6872ec. The full-install matrix jobs of `test-install.yml` were
+  cancelled at job setup / after hours queued by the GitHub action
+  download outage ("Service Unavailable"); `Install (tls)` completed
+  successfully. No code failure remained after the P0-5 fix.
 
 ## Delivery
 - No RC.2 tag or release produced. The audited repair state lives on
