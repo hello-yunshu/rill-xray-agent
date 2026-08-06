@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+
+EXPECTED = "e3ba5d7474498fbb556b0cae741a629ebb3bf1cd"
+BEGIN = "# BEGIN RILL XRAY AGENT INTEGRATION"
+END = "# END RILL XRAY AGENT INTEGRATION"
+BLOCK = r'''# BEGIN RILL XRAY AGENT INTEGRATION
+RILL_XRAY_AGENT_INTEGRATION_SCHEMA=1
+rill_xray_agent_manager=/etc/rill-xray-agent/scripts/rill_xray_agent_manager.sh
+if [[ -f "$rill_xray_agent_manager" ]]; then
+    source "$rill_xray_agent_manager"
+else
+    rxa_refresh_summary(){ RILL_XRAY_AGENT_HEADER_STATE='Agent: not installed'; RILL_XRAY_AGENT_HEADER_RUNTIME='Runtime: OFF'; RILL_XRAY_AGENT_HEADER_ROUTE='Route: OFF'; }
+    rxa_menu(){ echo 'Rill Xray Agent is not installed. Run the included bootstrap script.'; menu_pause; }
+    rxa_dispatch(){ case "${1:-}" in status) printf '%s\n' '{"installed":false,"routeAssistEnabled":false,"boundedAutoAllowed":false}' ;; install) bash "${scripts_dir}/rill_xray_agent_bootstrap.sh" ;; *) return 66 ;; esac; }
+fi
+# END RILL XRAY AGENT INTEGRATION'''
+
+
+def replace_once(text: str, old: str, new: str, label: str) -> str:
+    count = text.count(old)
+    if count != 1:
+        raise ValueError(f"{label}: anchor count={count}, expected 1")
+    return text.replace(old, new, 1)
+
+
+def patch(text: str) -> str:
+    if BEGIN in text:
+        if text.count(BEGIN) != 1 or text.count(END) != 1:
+            raise ValueError("partial integration markers")
+        return text
+    text = replace_once(text, "download_file() {", BLOCK + "\n\ndownload_file() {", "integration block")
+    text = replace_once(
+        text,
+        '    menu_fields "${xray_status_field}" "${nginx_status_field}" "${connect_status_field}"\n',
+        '    menu_fields "${xray_status_field}" "${nginx_status_field}" "${connect_status_field}"\n'
+        '    rxa_refresh_summary\n'
+        '    menu_divider "Rill Xray Agent"\n'
+        '    menu_fields "${RILL_XRAY_AGENT_HEADER_STATE}" "${RILL_XRAY_AGENT_HEADER_RUNTIME}" "${RILL_XRAY_AGENT_HEADER_ROUTE}"\n',
+        "header",
+    )
+    text = replace_once(
+        text,
+        '        menu_item 8 "$(gettext "修改语言") / Language"\n',
+        '        menu_item 8 "$(gettext "修改语言") / Language"\n        menu_item 9 "Rill Xray Agent"\n',
+        "menu item",
+    )
+    text = replace_once(text, "        menu_read menu_num 8\n", "        menu_read menu_num 9\n", "menu read")
+    text = replace_once(text, "            8) menu_action 99 ;;\n", "            8) menu_action 99 ;;\n            9) rxa_menu ;;\n", "menu case")
+    text = replace_once(
+        text,
+        "        --access-log|--error-log|--backup)",
+        "        --access-log|--error-log|--backup|\\\n"
+        "        --rill-agent|--rill-agent-status|--rill-agent-safe-disable|--rill-agent-verify|--rill-agent-uninstall)",
+        "offline allow",
+    )
+    text = replace_once(
+        text,
+        "        --backup) backup_directories ;;\n",
+        "        --backup) backup_directories ;;\n"
+        "        --rill-agent) rxa_menu ;;\n"
+        "        --rill-agent-status) rxa_dispatch status ;;\n"
+        "        --rill-agent-safe-disable) rxa_dispatch mode safe-disabled ;;\n"
+        "        --rill-agent-verify) rxa_dispatch verify ;;\n"
+        "        --rill-agent-uninstall) rxa_dispatch uninstall ;;\n",
+        "offline dispatch",
+    )
+    return text
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("repo", type=Path)
+    parser.add_argument("--allow-drift", action="store_true")
+    args = parser.parse_args()
+    repo = args.repo.resolve()
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    if head != EXPECTED and not args.allow_drift:
+        raise SystemExit(f"upstream drift: {head}; expected {EXPECTED}")
+    source = Path(__file__).resolve().parents[1] / "repository_files"
+    stage = Path(tempfile.mkdtemp(prefix="rill-xray-agent-"))
+    try:
+        target = stage / "repo"
+        shutil.copytree(repo, target, dirs_exist_ok=True, ignore=shutil.ignore_patterns(".git"))
+        install = target / "install.sh"
+        install.write_text(patch(install.read_text()))
+        for path in source.rglob("*"):
+            if path.is_file():
+                destination = target / path.relative_to(source)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(path, destination)
+        subprocess.run(["bash", "-n", str(install)], check=True)
+        # Copy only after the complete staged tree passes validation.
+        for rel in ("scripts", "systemd", "rill_payload", "assets", ".github", "docs"):
+            staged = target / rel
+            if staged.exists():
+                shutil.copytree(staged, repo / rel, dirs_exist_ok=True)
+        temp_install = repo / "install.sh.rxa.tmp"
+        temp_install.write_text(install.read_text())
+        os.chmod(temp_install, 0o755)
+        os.replace(temp_install, repo / "install.sh")
+        print(json.dumps({"ok": True, "base": head, "changed": True}, sort_keys=True))
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    main()

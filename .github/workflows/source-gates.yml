@@ -1,0 +1,11 @@
+name: Source Gates
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 -m pip install jsonschema
+      - run: python3 scripts/run_all_checks.py
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - run: shellcheck bin/* integrations/xray_bash_onekey/repository_files/scripts/*.sh
