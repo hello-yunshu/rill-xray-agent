@@ -30,4 +30,15 @@ class Tests(unittest.TestCase):
    r=Path(td);m=r/'managed';m.write_text('old');g=r/'gen';g.write_text('1\n');tx=RootTransaction(r/'tx',r/'delivery',g);req={'recommendationId':'d','configurationGeneration':1}
    with patch.dict(os.environ,{'RILL_FAIL_AFTER_COMMIT_BUNDLE':'1'}):
     with self.assertRaises(Exception):tx.apply(req,m,lambda:m.write_text('new'),lambda:True)
-   self.assertEqual(tx.recover_all(),['d']);self.assertEqual(g.read_text().strip(),'2');self.assertTrue((r/'delivery/route-delivery.json').is_file())
+   self.assertEqual(tx.recover_all(),[tx.work_dir_name('d')]);self.assertEqual(g.read_text().strip(),'2');self.assertTrue((r/'delivery/route-delivery.json').is_file())
+ def test_rollback_restores_managed(self):
+  with tempfile.TemporaryDirectory() as td:
+   r=Path(td);m=r/'managed';m.write_text('old');g=r/'gen';g.write_text('1\n');tx=RootTransaction(r/'tx',r/'delivery',g);req={'recommendationId':'x','configurationGeneration':1}
+   out=tx.apply(req,m,lambda:m.write_text('new'),lambda:False)
+   self.assertEqual(out['status'],'rolledBack');self.assertEqual(m.read_text(),'old');self.assertEqual(g.read_text().strip(),'1');self.assertEqual(tx.recover_all(),[tx.work_dir_name('x')]);self.assertTrue((r/'delivery/route-delivery.json').is_file())
+ def test_invalid_recommendation_id_rejected(self):
+  with tempfile.TemporaryDirectory() as td:
+   r=Path(td);m=r/'managed';m.write_text('old');g=r/'gen';g.write_text('1\n');tx=RootTransaction(r/'tx',r/'delivery',g)
+   for bad in ['../../escape','a/b','x'*129,'','sp ace']:
+    with self.assertRaises(Exception):tx.apply({'recommendationId':bad,'configurationGeneration':1},m,lambda:None,lambda:True)
+   self.assertFalse((r/'tx').exists() or (Path(r/'tx')/'escape').exists())
