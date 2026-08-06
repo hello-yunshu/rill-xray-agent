@@ -63,7 +63,7 @@
       "P0-4: RootTransaction recover_all() only handles transactions with an existing commit-bundle.json; prepared/applying/verify/commit-intent/rollback crash states are unrecoverable; recommendationId not validated",
       "P0-5: host update.sh replacement of itself downloads candidate over the running script path without schema/menu/hook validation",
       "P0-6: mode switch touches Runtime mode, config and systemd units without a four-party transaction; failure can leave split state",
-      "P0-7: observation chain reads /etc/rill-xray-agent/host mirror instead of real /etc/idleleo host paths"
+      "P0-7: observation chain reads the host mirror instead of the real Xray host configuration paths"
     ]
   }
 }
