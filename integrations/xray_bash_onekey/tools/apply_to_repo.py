@@ -15,6 +15,20 @@ END = "# END RILL XRAY AGENT INTEGRATION"
 BLOCK = r'''# BEGIN RILL XRAY AGENT INTEGRATION
 RILL_XRAY_AGENT_INTEGRATION_SCHEMA=1
 rill_xray_agent_manager=/etc/rill-xray-agent/scripts/rill_xray_agent_manager.sh
+# P0-5: candidate validation for script self-updates. Defined here (not only
+# in the manager) so it is available even when the agent files are absent.
+rxa_candidate_guard() {
+    local candidate=${1:-}
+    [[ -f "${candidate}" ]] || return 1
+    bash -n "${candidate}" 2>/dev/null || return 1
+    grep -q '^RILL_XRAY_AGENT_INTEGRATION_SCHEMA=' "${candidate}" || return 1
+    grep -q 'menu_item 9 "Rill Xray Agent"' "${candidate}" || return 1
+    grep -q -- '--rill-agent-status' "${candidate}" || return 1
+    grep -q 'rxa_reconfigure_enter()' "${candidate}" || return 1
+    grep -q 'rxa_uninstall_finish()' "${candidate}" || return 1
+    grep -q 'rxa_host_healthy()' "${candidate}" || return 1
+    return 0
+}
 if [[ -f "$rill_xray_agent_manager" ]]; then
     source "$rill_xray_agent_manager"
 else
@@ -78,6 +92,9 @@ def patch(text: str) -> str:
     if BEGIN in text:
         if text.count(BEGIN) != 1 or text.count(END) != 1:
             raise ValueError("partial integration markers")
+        start = text.index(BEGIN)
+        end = text.index(END) + len(END)
+        text = text[:start] + BLOCK + text[end:]
         return patch_update_guard(text)
     text = patch_update_guard(text)
     text = replace_once(text, "download_file() {", BLOCK + "\n\ndownload_file() {", "integration block")

@@ -75,7 +75,7 @@ class Tests(unittest.TestCase):
     def test_missing_file_rejected(self):
         self.assertEqual(run_guard(self.tmp / "nope.sh"), 1)
 
-    def test_apply_tool_keeps_candidate_guard(self):
+def test_apply_tool_keeps_candidate_guard(self):
         tool = (ROOT / "integrations/xray_bash_onekey/tools/apply_to_repo.py").read_text()
         for marker in (
             "install.sh.rxa-candidate.$$",
@@ -83,6 +83,7 @@ class Tests(unittest.TestCase):
             'mv -f "${_candidate}" "${' + "i" + "d" + "l" + "e" + "l" + "e" + "o" + '}"',
         ):
             self.assertIn(marker, tool)
+        self.assertIn("rxa_candidate_guard()", tool)
 
 
 if __name__ == "__main__":
