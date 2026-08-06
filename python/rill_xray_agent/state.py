@@ -58,7 +58,9 @@ class RuntimeState:
    i=p['identity']
    if payload.get('capability')!=i['capability'] or payload.get('modelGeneration')!=i['modelGeneration']:raise DecisionIdentityConflict('feedback identity conflict')
    if i['capability']=='route' and not p.get('rootResult'):raise ContractError('feedback before root result')
-   s['completed'][did]={'identity':i,'payload':payload,'payloadSha256':psha,'acceptedAtEpochSeconds':int(time.time())};del s['pending'][did]
+   from .payload_policy import sanitize_payload
+   payload_meta=sanitize_payload(payload)
+   s['completed'][did]={'identity':i,'payloadMeta':payload_meta,'payloadSha256':psha,'acceptedAtEpochSeconds':int(time.time())};del s['pending'][did]
    while len(s['completed'])>self.max_completed:
     evicted=sorted(s['completed'])[0];e=s['completed'].pop(evicted)
     s['closed'][evicted]=self._tombstone(e['identity'],e['payloadSha256'],e['acceptedAtEpochSeconds'])

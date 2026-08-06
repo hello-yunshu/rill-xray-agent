@@ -34,6 +34,11 @@
       "path": "history/2026-08-06-p0-4-root-transaction.md",
       "previousSha256": "ee3c681f0884cc06c39c63ca6de08c151352fec9255a6ed8c4e36748f7ec062e",
       "sha256": "9291847f93f9bf3e0c51895904c2acf1157f4926cc53001590fda92820cd39dd"
+    },
+    {
+      "path": "history/2026-08-06-security-ipc-payload.md",
+      "previousSha256": "9291847f93f9bf3e0c51895904c2acf1157f4926cc53001590fda92820cd39dd",
+      "sha256": "ed5a4d65c532e3a047b0cd7287ba55e832ddbdbaaca3ac62d6d453407fca0917"
     }
   ],
   "schemaVersion": 1

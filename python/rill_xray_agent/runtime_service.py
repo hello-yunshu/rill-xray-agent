@@ -2,15 +2,18 @@ import json, os, socket, time, uuid, threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from .audit import AuditLog
-from .canonical import canonical_bytes, digest
+from .canonical import atomic_write_json, canonical_bytes, digest
 from .health import health
 from .operation import OperationLog
+from .payload_policy import sanitize_payload
+from .peer_auth import AccessControl, peer_credentials
 from .state import RuntimeState
 ALLOWED = {'health', 'metrics', 'mode', 'config', 'register', 'rootResult', 'feedback', 'inspect', 'snapshot'}
+ACCESS_LOG_BYTES = 8 * 1024 * 1024
 
 
 class RuntimeService:
-    def __init__(self, state_root, txn_root, peer_creds=True):
+    def __init__(self, state_root, txn_root, peer_creds=True, allowed_uids=None, max_concurrency=32):
         self.state_root = Path(state_root)
         self.state_root.mkdir(parents=True, exist_ok=True)
         self.txn_root = Path(txn_root)
@@ -18,9 +21,34 @@ class RuntimeService:
         self.audit = AuditLog(self.state_root / 'audit')
         self.ops = OperationLog(self.state_root / 'operations', audit=self.audit)
         self.recovery = self.ops.recover()
-        self.pool = ThreadPoolExecutor(max_workers=32)
+        self.acl = AccessControl(allowed_uids)
+        self.sem = threading.BoundedSemaphore(max_concurrency)
+        self.access_log = self.state_root / 'access-log.jsonl'
+        self.pool = ThreadPoolExecutor(max_workers=max_concurrency)
         self._stop = threading.Event()
         self._socket_path = None
+
+    def _log_access(self, creds, method, ok):
+        if self.access_log.exists() and self.access_log.stat().st_size > ACCESS_LOG_BYTES:
+            self.access_log.rename(self.access_log.with_suffix('.old'))
+        line = {'ts': int(time.time()), 'pid': creds[0] if creds else None,
+                'uid': creds[1] if creds else None, 'gid': creds[2] if creds else None,
+                'method': method, 'ok': ok}
+        try:
+            with self.access_log.open('a') as f:
+                f.write(json.dumps(line, sort_keys=True) + '\n')
+                os.fsync(f.fileno())
+        except OSError:
+            pass
+
+    def _reject(self, c, rid, code, message):
+        try:
+            c.sendall(canonical_bytes({'schemaVersion': 3, 'requestId': rid, 'ok': False,
+                                       'error': {'code': code, 'message': message[:256]}}) + b'\n')
+        except OSError:
+            pass
+        finally:
+            c.close()
 
     def _op(self, kind, state_fn, event_type, event_details, actor_type='system', actor_id='runtime'):
         def wrapped(loaded):
@@ -41,7 +69,7 @@ class RuntimeService:
             elif m == 'metrics':
                 s = self.state.load()
                 r = {'pending': len(s['pending']), 'completed': len(s['completed']), 'closed': len(s['closed']),
-                     'activeOperations': self.ops.pending_count()}
+                     'activeOperations': self.ops.pending_count(), 'acl': self.acl.describe()}
             elif m == 'mode':
                 mode = b.get('mode')
                 if mode not in {'normal', 'observe-only', 'safe-disabled'}:
@@ -106,7 +134,9 @@ class RuntimeService:
                         raise ValueError('feedback identity conflict')
                     if ident['capability'] == 'route' and not p.get('rootResult'):
                         raise ValueError('feedback before root result')
-                    s['completed'][b['decisionId']] = {'identity': ident, 'payload': b, 'payloadSha256': psha,
+                    payload_meta = sanitize_payload(b)
+                    s['completed'][b['decisionId']] = {'identity': ident, 'payloadMeta': payload_meta,
+                                                       'payloadSha256': psha,
                                                        'acceptedAtEpochSeconds': int(time.time())}
                     del s['pending'][b['decisionId']]
                     while len(s['completed']) > self.state.max_completed:
@@ -129,20 +159,37 @@ class RuntimeService:
 
     def client(self, c):
         c.settimeout(5)
+        creds = peer_credentials(c)
+        rid = 'unknown'
         try:
-            d = b''
-            while b'\n' not in d and len(d) <= 1048576:
-                x = c.recv(65536)
-                if not x:
-                    break
-                d += x
-            if len(d) > 1048576:
-                raise ValueError('too large')
-            c.sendall(canonical_bytes(self.handle(json.loads(d.split(b'\n', 1)[0])))+b'\n')
-        except Exception as x:
+            if not self.sem.acquire(blocking=False):
+                self._reject(c, rid, 'serverBusy', 'concurrency limit reached')
+                return
             try:
-                c.sendall(canonical_bytes({'schemaVersion': 3, 'requestId': 'unknown', 'ok': False,
-                                           'error': {'code': 'transportError', 'message': str(x)[:256]}})+b'\n')
+                d = b''
+                while b'\n' not in d and len(d) <= 1048576:
+                    x = c.recv(65536)
+                    if not x:
+                        break
+                    d += x
+                if len(d) > 1048576:
+                    raise ValueError('too large')
+                envelope = json.loads(d.split(b'\n', 1)[0])
+                rid = envelope.get('requestId') or rid
+                if not self.acl.authorize(creds):
+                    self._log_access(creds, envelope.get('method'), False)
+                    self._reject(c, rid, 'forbiddenPeer', 'peer uid not allowed')
+                    return
+                out = self.handle(envelope, peer_uid=(creds[1] if creds else None))
+                self._log_access(creds, envelope.get('method'), bool(out.get('ok')))
+                c.sendall(canonical_bytes(out) + b'\n')
+            finally:
+                self.sem.release()
+        except Exception as x:
+            self._log_access(creds, rid, False)
+            try:
+                c.sendall(canonical_bytes({'schemaVersion': 3, 'requestId': rid, 'ok': False,
+                                           'error': {'code': 'transportError', 'message': str(x)[:256]}}) + b'\n')
             except Exception:
                 pass
         finally:
