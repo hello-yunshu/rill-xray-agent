@@ -39,6 +39,11 @@
       "path": "history/2026-08-06-security-ipc-payload.md",
       "previousSha256": "9291847f93f9bf3e0c51895904c2acf1157f4926cc53001590fda92820cd39dd",
       "sha256": "ed5a4d65c532e3a047b0cd7287ba55e832ddbdbaaca3ac62d6d453407fca0917"
+    },
+    {
+      "path": "history/2026-08-06-cross-repo-sync-gate.md",
+      "previousSha256": "ed5a4d65c532e3a047b0cd7287ba55e832ddbdbaaca3ac62d6d453407fca0917",
+      "sha256": "1d8d16c7fc3a98aacc254cf4d16166907a9c6fbeb00782b1f0a6d6aec431b3a9"
     }
   ],
   "schemaVersion": 1
