@@ -29,6 +29,11 @@
       "path": "history/2026-08-06-p0-3-closed-ledger.md",
       "previousSha256": "89aaa0ce6b45bc01d14b5384a48bc93d0e536017d0a2f3ddd0d8153f4e901c3c",
       "sha256": "ee3c681f0884cc06c39c63ca6de08c151352fec9255a6ed8c4e36748f7ec062e"
+    },
+    {
+      "path": "history/2026-08-06-p0-4-root-transaction.md",
+      "previousSha256": "ee3c681f0884cc06c39c63ca6de08c151352fec9255a6ed8c4e36748f7ec062e",
+      "sha256": "9291847f93f9bf3e0c51895904c2acf1157f4926cc53001590fda92820cd39dd"
     }
   ],
   "schemaVersion": 1
