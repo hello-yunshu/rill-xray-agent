@@ -46,7 +46,7 @@ class Tests(unittest.TestCase):
             for name in FORBIDDEN_NAMES:
                 if name.lower() in low:
                     problems.append(f"forbidden prompt file name: {rel}")
-            if path.is_file() and path.name != "PACKAGE_SHA256SUMS":
+            if path.is_file() and path.name != "PACKAGE_SHA256SUMS" and path.name != "test_public_repository_hygiene.py":
                 text = path.read_bytes().decode("utf-8", "ignore")
                 low_text = text.lower()
                 for marker in FORBIDDEN_CONTENT:
