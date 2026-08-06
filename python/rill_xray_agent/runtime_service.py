@@ -59,10 +59,14 @@ class RuntimeService:
                 def tx(s):
                     ident = {'capability': b['capability'], 'decisionId': b['decisionId'],
                              'modelGeneration': int(b['modelGeneration']), 'createdAtEpochSeconds': int(b['createdAtEpochSeconds'])}
-                    existing = (s['pending'].get(b['decisionId']) or s['completed'].get(b['decisionId'])
-                                or s['closed'].get(b['decisionId']))
+                    existing = (s['pending'].get(b['decisionId']) or s['completed'].get(b['decisionId']))
                     if existing:
                         if existing.get('identity') == ident:
+                            return {'status': 'idempotent'}, s
+                        raise ValueError('decision ID different identity')
+                    tomb = s['closed'].get(b['decisionId'])
+                    if tomb:
+                        if tomb['identityHash'] == digest(ident):
                             return {'status': 'idempotent'}, s
                         raise ValueError('decision ID different identity')
                     s['pending'][b['decisionId']] = {'identity': ident, 'rootResult': None,
@@ -89,6 +93,11 @@ class RuntimeService:
                         if c['payloadSha256'] == psha:
                             return {'status': 'idempotent', 'accepted': True}, s
                         raise ValueError('conflicting completed feedback')
+                    t = s['closed'].get(b['decisionId'])
+                    if t:
+                        if t['payloadHash'] == psha:
+                            return {'status': 'idempotent', 'accepted': True}, s
+                        raise ValueError('conflicting closed feedback')
                     p = s['pending'].get(b['decisionId'])
                     if not p:
                         raise ValueError('feedback unknown')
@@ -100,6 +109,11 @@ class RuntimeService:
                     s['completed'][b['decisionId']] = {'identity': ident, 'payload': b, 'payloadSha256': psha,
                                                        'acceptedAtEpochSeconds': int(time.time())}
                     del s['pending'][b['decisionId']]
+                    while len(s['completed']) > self.state.max_completed:
+                        evicted = sorted(s['completed'])[0]
+                        e = s['completed'].pop(evicted)
+                        s['closed'][evicted] = {'decisionIdHash': digest(evicted), 'identityHash': digest(e['identity']),
+                                                'payloadHash': e['payloadSha256'], 'closedAtEpochSeconds': e['acceptedAtEpochSeconds']}
                     return {'status': 'accepted', 'accepted': True}, s
                 r = self._op('feedback', tx, 'decision.feedback', {'decisionId': b.get('decisionId')})
             elif m == 'inspect':
