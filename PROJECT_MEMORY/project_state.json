@@ -1,12 +1,12 @@
 {
   "boundedAutoAllowed": false,
-  "latestHistorySha256": "6d2968dcb71efacba5a932d56b8e474286eb51d9ae98cb5020ba0e22d7b8e5c2",
-  "preReleaseAllowed": false,
+  "latestHistorySha256": "08f13f049a8cab2130d7ac19e93b4428a35e6ca30911ebde6881d47313965b29",
+  "preReleaseAllowed": true,
   "project": "Rill Xray Agent",
   "routeAssistEnabled": false,
   "schemaVersion": 1,
   "sourceProcessQualified": true,
   "stableAllowed": false,
-  "version": "0.1.0-alpha.1",
-  "xrayIntegrationApplied": false
+  "version": "0.1.0-rc.1",
+  "xrayIntegrationApplied": true
 }
