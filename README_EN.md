@@ -1,7 +1,7 @@
 # Rill Xray Agent
 
 > A local-first, fail-closed operational observation and decision-support agent for Xray management scripts.
-> Ships the portable Runtime, restricted Agent, audit chain, state and transaction recovery, backup safety, systemd units, Xray host integration files, tests, release gates and an AI execution prompt.
+> Ships the portable Runtime, restricted Agent, audit chain, state and transaction recovery, backup safety, systemd units, Xray host integration files, tests and release gates.
 
 [中文](./README.md) · [Docs](./docs/)
 
@@ -55,7 +55,7 @@ rill-xray-agent mode observe-only
 
 ## Status
 
-Currently **pre-release** (`v0.1.0-rc.1`), not yet formally released. Real-host systemd, Xray/Nginx/Fail2ban and ShellCheck pre-release qualification remain open items.
+Currently in **Alpha audit-repair phase** (baseline `v0.1.0-rc.1`). Release qualification has been revoked by the joint review: `preReleaseAllowed=false`, `sourceProcessQualified=false`, `stableAllowed=false`. A `v0.1.0-rc.2` tag and Pre-release are only allowed after all P0 items are closed, merged main CI is green and real PID1/systemd gates pass. Real-host systemd and Xray/Nginx/Fail2ban verification remain open items.
 
 ## License
 

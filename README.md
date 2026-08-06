@@ -1,7 +1,7 @@
 # Rill Xray Agent
 
 > 本地优先、fail-closed（默认关闭）的 Xray 管理脚本观测与决策支持代理。
-> 包含可移植运行时（Runtime）、受限代理（Agent）、审计链、状态与事务恢复、备份安全、systemd 单元、Xray 宿主集成、测试、发布门禁与 AI execution instructions。
+> 包含可移植运行时（Runtime）、受限代理（Agent）、审计链、状态与事务恢复、备份安全、systemd 单元、Xray 宿主集成、测试与发布门禁。
 
 [English](./README_EN.md) · [文档目录](./docs/)
 
@@ -55,7 +55,7 @@ rill-xray-agent mode observe-only
 
 ## 状态
 
-当前为 **pre-release**（`v0.1.0-rc.1`），尚未正式发布。真实主机 systemd、Xray/Nginx/Fail2ban 及 ShellCheck 上线前资格验证仍为待办项。
+当前处于 **Alpha 审计修复阶段**（基线 `v0.1.0-rc.1`），发布资格已被联合审计撤销：`preReleaseAllowed=false`、`sourceProcessQualified=false`、`stableAllowed=false`。`v0.1.0-rc.2` 标签与 Pre-release 只有在全部 P0 关闭、合并后 CI 全绿且真实 PID1/systemd 门禁通过后才允许创建。真实主机 systemd、Xray/Nginx/Fail2ban 验证仍为待办项。
 
 ## 许可证
 
