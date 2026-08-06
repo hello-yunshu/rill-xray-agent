@@ -21,7 +21,7 @@ done
 cp -a "$SOURCE/../rill_payload/." "$(root /opt/rill-xray-agent/)"
 find "$(root /opt/rill-xray-agent/bin)" -type f -exec chmod 0755 {} +
 for unit in "$SOURCE"/../systemd/*; do
-    install -m 0644 "$unit" "$(root /etc/systemd/system/$(basename "$unit"))"
+    install -m 0644 "$unit" "$(root "/etc/systemd/system/$(basename "$unit")")"
 done
 [[ -f "$(root /etc/rill-xray-agent/config.json)" ]] || install -m 0640 "$SOURCE/../rill_payload/config/default.json" "$(root /etc/rill-xray-agent/config.json)"
 

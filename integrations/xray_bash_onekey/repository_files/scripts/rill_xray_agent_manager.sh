@@ -8,6 +8,7 @@ RILL_XRAY_AGENT_CLI=${RILL_XRAY_AGENT_CLI:-/opt/rill-xray-agent/bin/rill-xray-ag
 RILL_XRAY_AGENT_HEADER_STATE='Agent: not installed'
 RILL_XRAY_AGENT_HEADER_RUNTIME='Runtime: OFF'
 RILL_XRAY_AGENT_HEADER_ROUTE='Route: OFF'
+export RILL_XRAY_AGENT_HEADER_STATE RILL_XRAY_AGENT_HEADER_RUNTIME RILL_XRAY_AGENT_HEADER_ROUTE
 
 rxa_systemctl() {
     [[ ${RILL_XRAY_AGENT_NO_SYSTEMD:-0} == 1 ]] && return 0
@@ -116,6 +117,7 @@ rxa_verify() {
 
 rxa_menu() {
     local choice
+    scripts_dir=${scripts_dir:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)}
     while true; do
         menu_submenu_begin "Rill Xray Agent"
         menu_item 1 "Status"
