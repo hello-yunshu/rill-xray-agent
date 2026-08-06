@@ -58,6 +58,7 @@
   },
   "auditFindings": {
     "p0": [
+      "P0-1: the single master execution instruction file was removed from the repository root by main HEAD (public-repository hygiene now forbids any prompt material in this repo, including history); package manifest (verify_package_tree.py / PACKAGE_SHA256SUMS) no longer matches the required tree; main Source Gates failing",
       "P0-2: state mutation precedes audit append; crash between them splits state and audit with API returning success only after audit failure",
       "P0-3: completed decisions are evicted without a permanent replay tombstone; identity replay/conflict semantics lost",
       "P0-4: RootTransaction recover_all() only handles transactions with an existing commit-bundle.json; prepared/applying/verify/commit-intent/rollback crash states are unrecoverable; recommendationId not validated",
