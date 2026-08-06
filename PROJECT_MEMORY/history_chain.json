@@ -49,6 +49,11 @@
       "path": "history/2026-08-06-xray-p0-5-6-7-closed.md",
       "previousSha256": "1d8d16c7fc3a98aacc254cf4d16166907a9c6fbeb00782b1f0a6d6aec431b3a9",
       "sha256": "10537de8ace4e9a00569baa810fbd8148f5cc9b99e74e653c35f93b009a0b851"
+    },
+    {
+      "path": "history/2026-08-06-xray-requal-evidence.md",
+      "previousSha256": "10537de8ace4e9a00569baa810fbd8148f5cc9b99e74e653c35f93b009a0b851",
+      "sha256": "e3d63a769be330c8d771df57f741c7ea308fa47169875c7674d3923f9ab24bb6"
     }
   ],
   "schemaVersion": 1
