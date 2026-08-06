@@ -32,10 +32,14 @@ for path in root.rglob("*"):
         errors.append(f"symlink forbidden: {rel}")
     if any(part in {".git", "__pycache__", ".pytest_cache", "target"} for part in rel.parts):
         errors.append(f"cache/build path forbidden: {rel}")
+    # The host identity token is a boundary allowed inside this single
+    # integration tree; it must never leak into core, brand or commands.
+    identity_root = Path("integrations") / "xray_bash_onekey"
+    in_integration = rel == identity_root or identity_root in rel.parents
     forbidden = "i" + "d" + "l" + "e" + "l" + "e" + "o"
-    if forbidden in rel.as_posix().lower():
+    if not in_integration and forbidden in rel.as_posix().lower():
         errors.append(f"forbidden identity in path: {rel}")
-    if path.is_file() and path.name != "PACKAGE_SHA256SUMS":
+    if path.is_file() and path.name != "PACKAGE_SHA256SUMS" and not in_integration:
         if forbidden in path.read_text(errors="ignore").lower():
             errors.append(f"forbidden identity in content: {rel}")
 if (root / "Cargo.lock").exists():

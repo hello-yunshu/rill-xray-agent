@@ -31,6 +31,10 @@ else:
         "rxa_uninstall_finish() {",
         "rxa_rc=\\$?; reinstall_rollback_on_return",
         "trap 'rxa_reconfigure_leave $?' RETURN",
+        # P0-5: any script update must validate a candidate before replacing it.
+        "install.sh.rxa-candidate.$$",
+        'rxa_candidate_guard "${_candidate}"',
+        'mv -f "${_candidate}" "${idleleo}"',
     ):
         assert token in text, token
 print(json.dumps({"ok": True, "head": head, "postIntegration": args.post_integration}, sort_keys=True))

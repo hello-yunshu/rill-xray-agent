@@ -44,6 +44,11 @@
       "path": "history/2026-08-06-cross-repo-sync-gate.md",
       "previousSha256": "ed5a4d65c532e3a047b0cd7287ba55e832ddbdbaaca3ac62d6d453407fca0917",
       "sha256": "1d8d16c7fc3a98aacc254cf4d16166907a9c6fbeb00782b1f0a6d6aec431b3a9"
+    },
+    {
+      "path": "history/2026-08-06-xray-p0-5-6-7-closed.md",
+      "previousSha256": "1d8d16c7fc3a98aacc254cf4d16166907a9c6fbeb00782b1f0a6d6aec431b3a9",
+      "sha256": "10537de8ace4e9a00569baa810fbd8148f5cc9b99e74e653c35f93b009a0b851"
     }
   ],
   "schemaVersion": 1
