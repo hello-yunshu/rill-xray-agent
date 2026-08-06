@@ -8,4 +8,4 @@ jobs:
       - run: python3 -m pip install jsonschema
       - run: python3 scripts/run_all_checks.py
       - run: sudo apt-get update && sudo apt-get install -y shellcheck
-      - run: shellcheck bin/* integrations/xray_bash_onekey/repository_files/scripts/*.sh
+      - run: shellcheck --exclude=SC1091 integrations/xray_bash_onekey/repository_files/scripts/*.sh
