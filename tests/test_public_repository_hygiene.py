@@ -5,8 +5,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 _P = "PRO" + "MPT"
-_TOTAL = "master" + "instructions"
-_EXEC = "执行" + "instructions"
+_TOTAL = "总" + "执行" + "提示" + "词"
+_EXEC = "执行" + "提示" + "词"
 _SCANNER_TOKEN = "AI " + _EXEC
 _SCANNER_TOKEN_EN = "AI execution " + "prompt"
 _SYSTEM = "system " + "prompt"
