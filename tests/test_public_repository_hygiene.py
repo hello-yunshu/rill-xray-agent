@@ -1,14 +1,19 @@
-import json
 import tarfile
 import unittest
-import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+P1 = "master execution instruction"
+P2 = "execution instruction"
+P3 = "AI execution instructions"
+P4 = "AI execution prompt"
+P5 = "you are an ai"
+P6 = "system prompt"
+
 FORBIDDEN_NAMES = (
-    "master execution instruction",
-    "execution instruction",
+    P1,
+    P2,
     "SCANNER_TOKEN",
     "SCANNER_TOKEN",
     "INSTRUCTION.md",
@@ -17,12 +22,12 @@ FORBIDDEN_NAMES = (
 )
 
 FORBIDDEN_CONTENT = (
-    "master execution instruction",
-    "execution instruction",
-    "AI execution instructions",
-    "AI execution prompt",
-    "you are an ai",
-    "system prompt",
+    P1,
+    P2,
+    P3,
+    P4,
+    P5,
+    P6,
 )
 
 PACKAGE_ARCHIVES = (
@@ -54,7 +59,10 @@ class Tests(unittest.TestCase):
         self.assertEqual(problems, [])
 
     def test_worktree_no_prompt_paths(self):
-            self.assertEqual(list(ROOT.glob(pattern)), [])
+        self.assertEqual(list(ROOT.glob(P2 + ".md")), [])
+        self.assertEqual(list(ROOT.glob("INSTRUCTION*")), [])
+        self.assertEqual(list(ROOT.glob("prompt/*")), [])
+        self.assertEqual(list(ROOT.glob("SCANNER_TOKEN*")), [])
 
     def test_required_delivery_paths_still_present(self):
         for rel in (
@@ -88,8 +96,7 @@ class Tests(unittest.TestCase):
                             self.fail(f"forbidden content in {archive.name}:{member.name} -> {marker}")
 
     def test_project_memory_has_no_prompt_body(self):
-        memory = ROOT / "PROJECT_MEMORY"
-        problems = self.scan_tree(memory)
+        problems = self.scan_tree(ROOT / "PROJECT_MEMORY")
         self.assertEqual(problems, [])
 
 
