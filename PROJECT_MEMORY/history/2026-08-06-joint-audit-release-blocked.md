@@ -2,6 +2,7 @@
 
 2026-08-06 joint repository review of `hello-yunshu/rill-xray-agent` and `hello-yunshu/Xray_bash_onekey` (Draft PR #54). Findings require qualification to be revoked:
 
+- Current Rill `main` Source Gates FAIL (run 31096443942); package manifest no longer matches the source tree; the repository root lost its single master execution instruction file while `verify_package_tree.py` still required it; per the public-repository hygiene rule, execution prompt material is permanently forbidden in this repository and must also be removed from history.
 - Xray CI is green but the Rill integration test is grep-only (9 lines) and does not cover lifecycle, fault injection or bundle consistency.
 - P0-2: Runtime state is mutated before the audit event is appended; a crash/failure between them leaves state and audit split while the API reports failure after the state is already committed.
 - P0-3: completed decisions are evicted by capacity without a permanent replay tombstone; decision identity semantics are lost.
