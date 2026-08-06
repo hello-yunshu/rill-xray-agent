@@ -14,6 +14,11 @@
       "path": "history/2026-08-06-host-integration-and-rc.md",
       "previousSha256": "6d2968dcb71efacba5a932d56b8e474286eb51d9ae98cb5020ba0e22d7b8e5c2",
       "sha256": "08f13f049a8cab2130d7ac19e93b4428a35e6ca30911ebde6881d47313965b29"
+    },
+    {
+      "path": "history/2026-08-06-joint-audit-release-blocked.md",
+      "previousSha256": "08f13f049a8cab2130d7ac19e93b4428a35e6ca30911ebde6881d47313965b29",
+      "sha256": "4720be380992855b817e580d50a2c7daa6ca207d440b80242f2d36c7843cf628"
     }
   ],
   "schemaVersion": 1
