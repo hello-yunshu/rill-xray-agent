@@ -78,7 +78,8 @@ def patch(text: str) -> str:
     if BEGIN in text:
         if text.count(BEGIN) != 1 or text.count(END) != 1:
             raise ValueError("partial integration markers")
-        return text
+        return patch_update_guard(text)
+    text = patch_update_guard(text)
     text = replace_once(text, "download_file() {", BLOCK + "\n\ndownload_file() {", "integration block")
     text = replace_once(
         text,
@@ -116,6 +117,82 @@ def patch(text: str) -> str:
         "offline dispatch",
     )
     return text
+
+
+def patch_update_guard(text: str) -> str:
+    """P0-5: an install.sh update must download to a candidate, validate it,
+    and only then atomically replace the running script. On any validation
+    failure the old version is kept. Idempotent on re-apply."""
+    if "install.sh.rxa-candidate" in text:
+        return text
+    lines = text.split("\n")
+    download_line = '            download_script_file "${main_remote_url}" "${idleleo_dir}/install.sh"'
+    anchors = [i for i, line in enumerate(lines) if line == download_line]
+    if not anchors:
+        return text
+    i = anchors[0]
+    j = i
+    while j + 1 < len(lines) and not lines[j + 1].lstrip().startswith("downloaded_shell_version="):
+        j += 1
+    if j + 1 >= len(lines) or not lines[j + 1].lstrip().startswith("downloaded_shell_version="):
+        raise ValueError("update_sh download span not terminated")
+    new_block = [
+        '            _candidate="${idleleo_dir}/install.sh.rxa-candidate.$$"',
+        '            if ! download_script_file "${main_remote_url}" "${_candidate}"; then',
+        '                rm -f "${_candidate}"',
+        '                [[ -n "${_backup_script}" && -f "${_backup_script}" ]] && mv -f "${_backup_script}" "${idleleo}"',
+        '                ln -sf "${idleleo}" "${idleleo_commend_file}"',
+        '                [[ ${auto_update} == "YES" ]] && echo "$(gettext "脚本更新失败")!" >>"${log_file}"',
+        '                [[ ${auto_update} != "YES" ]] && log_echo "${Error} ${RedBG} $(gettext "脚本更新失败")! ${Font}"',
+        '                return 1',
+        '            fi',
+        '            # Rill Xray Agent: validate the candidate before it can replace',
+        '            # the running script; on any failure keep the old version.',
+        '            if ! command -v rxa_candidate_guard >/dev/null 2>&1 || ! rxa_candidate_guard "${_candidate}"; then',
+        '                rm -f "${_candidate}"',
+        '                [[ -n "${_backup_script}" && -f "${_backup_script}" ]] && mv -f "${_backup_script}" "${idleleo}"',
+        '                ln -sf "${idleleo}" "${idleleo_commend_file}"',
+        '                log_echo "${Error} ${RedBG} Rill Xray Agent $(gettext "集成校验失败, 已阻止脚本更新") ${Font}"',
+        '                return 1',
+        '            fi',
+    ]
+    lines = lines[:i] + new_block + lines[j + 1:]
+    for k, line in enumerate(lines):
+        if line.startswith("                grep -E '^shell_version='") and '${idleleo_dir}/install.sh' in line:
+            lines[k] = line.replace('"${idleleo_dir}/install.sh"', '"${_candidate}"')
+    joined = "\n".join(lines)
+    joined = joined.replace(
+        '                  "${downloaded_shell_version}" != "${newest_version}" ]]; then\n',
+        '                  "${downloaded_shell_version}" != "${newest_version}" ]]; then\n'
+        '                rm -f "${_candidate}"\n',
+    )
+    joined = joined.replace(
+        '            fi\n            rm -f "${_backup_script}"\n            ln -s "${idleleo}" "${idleleo_commend_file}"\n',
+        '            fi\n            mv -f "${_candidate}" "${idleleo}"\n'
+        '            rm -f "${_backup_script}"\n            ln -s "${idleleo}" "${idleleo_commend_file}"\n',
+    )
+    # The same overwrite-before-validation defect exists in the alternate
+    # self-update path (idleleo_commend) and in check_file_integrity: every
+    # remaining plain download must go through the candidate + guard + move.
+    plain = '            download_script_file "${main_remote_url}" "${idleleo_dir}/install.sh"'
+    safe = (
+        '            _candidate="${idleleo_dir}/install.sh.rxa-candidate.$$"\n'
+        '            if ! download_script_file "${main_remote_url}" "${_candidate}"; then\n'
+        '                rm -f "${_candidate}"\n'
+        '                return 1\n'
+        '            fi\n'
+        '            if ! command -v rxa_candidate_guard >/dev/null 2>&1 || ! rxa_candidate_guard "${_candidate}"; then\n'
+        '                rm -f "${_candidate}"\n'
+        '                echo "Rill Xray Agent $(gettext "集成校验失败, 已阻止脚本更新")" >&2\n'
+        '                return 1\n'
+        '            fi\n'
+        '            mv -f "${_candidate}" "${idleleo}"\n'
+    )
+    count = joined.count(plain)
+    joined = joined.replace(plain, safe)
+    if count == 0:
+        raise ValueError("plain download line missing after update_sh patch")
+    return joined
 
 
 def main() -> None:
