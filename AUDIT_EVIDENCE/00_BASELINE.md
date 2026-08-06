@@ -26,7 +26,7 @@ Captured 2026-08-06 21:30 (UTC+8) from live GitHub state. Evidence JSON: `AUDIT_
 | P0-4 | RootTransaction recovery only handles commit-bundle state; recommendationId unvalidated |
 | P0-5 | update.sh script replacement unvalidated (downloads over running script) |
 | P0-6 | Mode switch not a config/Runtime/systemd four-party transaction |
-| P0-7 | Observer reads `/etc/rill-xray-agent/host` mirror, not real `/etc/idleleo` paths |
+| P0-7 | Observer reads the host mirror instead of the real Xray host configuration paths |
 
 ## Immediate downgrade (this branch)
 
