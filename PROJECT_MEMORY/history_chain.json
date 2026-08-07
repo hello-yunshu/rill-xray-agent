@@ -54,6 +54,11 @@
       "path": "history/2026-08-06-xray-requal-evidence.md",
       "previousSha256": "10537de8ace4e9a00569baa810fbd8148f5cc9b99e74e653c35f93b009a0b851",
       "sha256": "e3d63a769be330c8d771df57f741c7ea308fa47169875c7674d3923f9ab24bb6"
+    },
+    {
+      "path": "history/2026-08-07-merge-blockers-fix.md",
+      "previousSha256": "e3d63a769be330c8d771df57f741c7ea308fa47169875c7674d3923f9ab24bb6",
+      "sha256": "58ed2db32d3f9eebd791f256931c384ab5d563edbc236244ff630b0e9d53c2e7"
     }
   ],
   "schemaVersion": 1
