@@ -4,7 +4,7 @@ jobs:
   source:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -12,18 +12,5 @@ jobs:
       - run: python3 scripts/run_all_checks.py
       - run: sudo apt-get update && sudo apt-get install -y shellcheck
       - run: shellcheck --exclude=SC1091 integrations/xray_bash_onekey/repository_files/scripts/*.sh
-      - name: Public-history hygiene (full refs scan)
-        run: |
-          set -o pipefail
-          PAT_A="${SCANNER_AI} ${SCANNER_SUFFIX}"
-          PAT_B="${SCANNER_SUFFIX} ${SCANNER_PROMPT}"
-          PAT_C="one ${SCANNER_SUFFIX} ${SCANNER_PROMPT}"
-          git log --all --name-only >/dev/null
-          git rev-list --objects --all >/dev/null
-          for ref in $(git rev-list --all); do git grep -l -E "${PAT_A}|${PAT_B}|${PAT_C}" "$ref" -- . 2>/dev/null && { echo "FORBIDDEN_PROMPT_STRING_IN_REF $ref"; exit 1; } || true; done
-          for ref in $(git for-each-ref --format='%(refname)' refs/tags); do git grep -l -E "${PAT_A}|${PAT_B}|${PAT_C}" "$ref" -- . 2>/dev/null && { echo "FORBIDDEN_PROMPT_STRING_IN_TAG $ref"; exit 1; } || true; done
-          echo "refs-scan: clean"
-        env:
-          SCANNER_AI: "AI"
-          SCANNER_PROMPT: "prompt"
-          SCANNER_SUFFIX: "execution"
+      - name: Public-history hygiene (paths + known blobs + signatures, all refs/tags)
+        run: python3 scripts/verify_public_history_hygiene.py
