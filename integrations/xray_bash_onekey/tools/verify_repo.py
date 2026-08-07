@@ -27,8 +27,13 @@ else:
         "--rill-agent-uninstall",
         "rxa_reconfigure_enter() {",
         "rxa_reconfigure_leave() {",
-        "rxa_uninstall_enter() {",
+        # P0-x two-phase uninstall: prepare/commit/abort contract.
+        "rxa_uninstall_prepare() {",
+        "rxa_uninstall_commit() {",
+        "rxa_uninstall_abort() {",
         "rxa_uninstall_finish() {",
+        "rxa_uninstall_finish \"$rxa_uninstall_rc\"",
+        "local rxa_uninstall_rc=0",
         "rxa_rc=\\$?; reinstall_rollback_on_return",
         "trap 'rxa_reconfigure_leave $?' RETURN",
         # P0-5: any script update must validate a candidate before replacing it.
