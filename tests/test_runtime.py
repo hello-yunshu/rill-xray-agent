@@ -1,4 +1,4 @@
-import json,socket,tempfile,threading,time,unittest
+import json,os,socket,tempfile,threading,time,unittest
 from pathlib import Path
 from rill_xray_agent.canonical import canonical_bytes
 from rill_xray_agent.runtime_service import RuntimeService
@@ -15,7 +15,7 @@ class Tests(unittest.TestCase):
   raise AssertionError(f'Runtime did not become ready: {last!r}')
  def test_runtime_ipc(self):
   with tempfile.TemporaryDirectory() as td:
-   r=Path(td);sock=r/'r.sock';svc=RuntimeService(r/'state',r/'tx');t=threading.Thread(target=svc.serve,args=(sock,),daemon=True);t.start()
+   r=Path(td);sock=r/'r.sock';svc=RuntimeService(r/'state',r/'tx',allowed_uids=[os.getuid()]);t=threading.Thread(target=svc.serve,args=(sock,),daemon=True);t.start()
    out=self.request_when_ready(sock,{'schemaVersion':3,'requestId':'x','capability':'route','method':'health','body':{}})
    self.assertTrue(out['ok']);self.assertEqual(out['result']['status'],'ready');svc.stop();t.join(timeout=3);self.assertFalse(t.is_alive());self.assertFalse(sock.exists())
  def test_reset_forbidden(self):

@@ -115,7 +115,12 @@ def compute_manifest() -> dict:
         else:
             files[f"source/{pinned.relative_to(ROOT).as_posix()}"] = sha_bytes(pinned.read_bytes())
     # repository_files payload/scripts/systemd/assets (+.github for the mirror).
-    for top in ("rill_payload", "scripts", "systemd", "assets", ".github"):
+    # .github is deliberately EXCLUDED from the canonical byte scope: it holds
+    # the Xray-consumer workflow whose RILL_CANONICAL_COMMIT pin would make the
+    # manifest self-referential (pinning the commit that contains the pin).
+    # Xray host-owned CI orchestration is verified by the consuming workflow
+    # against the manifest, never mirrored back as canonical payload.
+    for top in ("rill_payload", "scripts", "systemd", "assets"):
         base = REPO_FILES / top
         if not base.exists():
             continue
