@@ -23,6 +23,7 @@ commands = [
     ([sys.executable, "scripts/verify_project_memory.py"], 30),
     ([sys.executable, "scripts/verify_package_tree.py"], 30),
     ([sys.executable, "scripts/verify_package_sums.py"], 30),
+    ([sys.executable, "scripts/build_canonical_manifest.py", "--check"], 30),
 ]
 seed = int(os.environ.get("RILL_GATE_ORDER_SEED", "0"))
 head = commands[:-1]
