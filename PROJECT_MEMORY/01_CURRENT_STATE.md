@@ -11,7 +11,10 @@ public-history hygiene rewrite, pre-submit admission, fail-closed peer ACLs,
 bounded closed ledger, semantic candidate self-check, pinned action SHAs.
 
 Still open: real PID1/systemd qualification (Debian 12 / Ubuntu 24.04),
-independent zero-P0 audit, fresh 20/20 randomized gates from a clean freeze, and
-observation of GitHub Actions runs for the pushed branches. `v0.1.0-rc.2`
-tag/Release forbidden until merged main CI is green and real-host gates pass.
-Route Assist OFF, bounded auto OFF, observe-only default.
+independent zero-P0 audit, and fresh 20/20 randomized gates from a clean
+freeze. `v0.1.0-rc.2` tag/Release forbidden until merged main CI is green and
+real-host gates pass. Route Assist OFF, bounded auto OFF, observe-only default.
+
+Required CI is currently green on both PR branches (Rill Source Gates,
+Xray Rill Xray Agent, Xray Test Install). Remaining gate to "Ready for review"
+is the fresh 20/20 randomized freeze plus real-host qualification.
