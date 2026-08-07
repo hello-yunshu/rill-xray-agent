@@ -60,6 +60,8 @@ class Tests(unittest.TestCase):
             "rxa_verify_runtime_mode",
             'rxa_runtime mode "$old"',
             "rxa_set mode \"$mode\"",
+            "rxa_mode_state_matches_target()",
+            "rxa_observe_valid()",
         ):
             self.assertIn(marker, manager)
 

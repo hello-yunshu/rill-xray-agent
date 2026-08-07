@@ -101,6 +101,20 @@ class Tests(unittest.TestCase):
                 st.feedback({'decisionId': 'q0', 'capability': 'route', 'modelGeneration': 1, 'terminalPayload': {'x': 1}})
             self.assertIn('closed', str(cm.exception))
 
+    def test_ledger_externalized_on_disk(self):
+        from rill_xray_agent.state import ClosedLedger
+        with tempfile.TemporaryDirectory() as td:
+            ledger = ClosedLedger(Path(td) / 'ledger', max_entries=2)
+            ledger.put('d0', digest('id0'), digest('p0'), 1000)
+            ledger.put('d1', digest('id1'), digest('p1'), 1000)
+            self.assertEqual(ledger.count(), 2)
+            self.assertTrue((Path(td) / 'ledger' / f'{digest("d0")}.json').is_file())
+            with self.assertRaises(Exception) as cm:
+                ledger.put('d2', digest('id2'), digest('p2'), 1000)
+            self.assertEqual(cm.exception.__class__.__name__, 'LedgerFullError')
+            self.assertIsNone(ledger.get('never'))
+            self.assertFalse((Path(td) / 'ledger' / f'{digest("d0")}.json').read_text().__contains__('decision0_id'))
+
 
 if __name__ == '__main__':
     unittest.main()

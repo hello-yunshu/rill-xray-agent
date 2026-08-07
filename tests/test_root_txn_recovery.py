@@ -11,25 +11,11 @@ from rill_xray_agent.root_txn import RootTransaction
 STATES = ['prepared', 'applying', 'applied', 'verified', 'commit-intent',
           'rollback-intent', 'rollbackUnverified']
 
-FAULTS = {
-    'prepared': 'RILL_CRASH_PREPARED',
-    'applying': 'RILL_CRASH_APPLYING',
-    'applied': 'RILL_CRASH_APPLIED',
-    'verified': 'RILL_CRASH_VERIFIED',
-    'commit-intent': 'RILL_CRASH_COMMIT_INTENT',
-    'rollback-intent': 'RILL_CRASH_ROLLBACK_INTENT',
-    'rollbackUnverified': 'RILL_CRASH_ROLLBACK_UNVERIFIED',
-}
-
-
-def crash(state):
-    if os.environ.get(FAULTS[state]) == '1':
-        raise RuntimeError(f'crash at {state}')
-
-
-def ctrl(state, current):
-    """Simulate crash at the given state by writing state.json directly."""
-    pass
+# Real crash points wired into root_txn.fault(): each maps to a durable
+# persistence boundary in the production transaction.
+COMMIT_POINTS = ['PREPARED', 'APPLYING', 'MANAGED_MUTATION', 'APPLIED', 'VERIFIED', 'COMMIT_INTENT']
+ROLLBACK_POINTS = ['ROLLBACK_INTENT', 'MANAGED_RESTORE', 'GENERATION_RESTORE', 'ROLLBACK_BUNDLE',
+                   'RESULT', 'RECEIPT', 'DELIVERY', 'TERMINAL']
 
 
 class Tests(unittest.TestCase):
@@ -119,7 +105,57 @@ class Tests(unittest.TestCase):
             for bad in ['../x', 'a/b', 'x' * 200, '', 'a b']:
                 with self.assertRaises(Exception):
                     tx.apply({'recommendationId': bad, 'configurationGeneration': 1}, m, lambda: None, lambda: True)
-            self.assertEqual(list((r / 'tx').iterdir()), [], 'no stray path dirs') if (r / 'tx').exists() else self.assertTrue(True)
+            if (r / 'tx').exists():
+                self.assertEqual(list((r / 'tx').iterdir()), [], 'no stray path dirs')
+
+    def test_fault_at_each_commit_point_recoverable(self):
+        for point in COMMIT_POINTS:
+            with tempfile.TemporaryDirectory() as td:
+                r = Path(td)
+                m = r / 'managed'
+                m.write_text('old')
+                g = r / 'gen'
+                g.write_text('1\n')
+                tx = RootTransaction(r / 'tx', r / 'delivery', g)
+                req = {'recommendationId': 'd-c', 'configurationGeneration': 1}
+                with patch.dict(os.environ, {f'RILL_FAULT_{point}': '1'}):
+                    try:
+                        tx.apply(req, m, lambda: m.write_text('new'), lambda: True)
+                    except Exception:
+                        pass
+                recovered = tx.recover_all()
+                w = tx.root / tx.work_dir_name('d-c')
+                self.assertIn(w.name, recovered, point)
+                final = read_state(w)
+                self.assertIn(final, {'committed', 'rolledBack'}, point)
+                self.assertTrue((w / 'commit-bundle.json').exists(), point)
+                h = health(Path(td) / 'state', tx.root)
+                self.assertEqual(h['status'], 'ready', f'{point}: {h}')
+
+    def test_fault_at_each_rollback_point_recoverable(self):
+        for point in ROLLBACK_POINTS:
+            with tempfile.TemporaryDirectory() as td:
+                r = Path(td)
+                m = r / 'managed'
+                m.write_text('old')
+                g = r / 'gen'
+                g.write_text('1\n')
+                tx = RootTransaction(r / 'tx', r / 'delivery', g)
+                req = {'recommendationId': 'd-r', 'configurationGeneration': 1}
+                with patch.dict(os.environ, {f'RILL_FAULT_{point}': '1'}):
+                    def apply_fn():
+                        m.write_text('partial')
+                    try:
+                        tx.apply(req, m, apply_fn, lambda: False)
+                    except Exception:
+                        pass
+                w = tx.root / tx.work_dir_name('d-r')
+                tx.recover_all()
+                self.assertEqual(read_state(w), 'rolledBack', point)
+                self.assertEqual(m.read_text(), 'old', point)
+                self.assertTrue((r / 'delivery/route-delivery.json').is_file(), point)
+                h = health(Path(td) / 'state', tx.root)
+                self.assertEqual(h['status'], 'ready', f'{point}: {h}')
 
     def test_health_recovery_required_for_incomplete(self):
         with tempfile.TemporaryDirectory() as td:
