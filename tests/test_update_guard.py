@@ -1,3 +1,4 @@
+import re
 import subprocess
 import tempfile
 import unittest
@@ -5,18 +6,34 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANAGER = ROOT / "integrations/xray_bash_onekey/repository_files/scripts/rill_xray_agent_manager.sh"
+APPLY = ROOT / "integrations/xray_bash_onekey/tools/apply_to_repo.py"
 
-GOOD = """#!/usr/bin/env bash
-RILL_XRAY_AGENT_INTEGRATION_SCHEMA=1
-rxa_reconfigure_enter() { return 0; }
-rxa_uninstall_finish() { return 0; }
-rxa_host_healthy() { return 0; }
-menu_item() { return 0; }
-menu_item 9 "Rill Xray Agent"
-case "${1:-}" in
-    --rill-agent-status) rxa_dispatch status ;;
-esac
-"""
+
+def canonical_block() -> str:
+    src = APPLY.read_text()
+    m = re.search(r"BLOCK = r'''(.*?)'''", src, re.S)
+    if not m:
+        raise AssertionError("canonical BLOCK not found in apply_to_repo.py")
+    return m.group(1)
+
+
+def build(custom_block: str | None = None) -> str:
+    block = canonical_block() if custom_block is None else custom_block
+    return (
+        "#!/usr/bin/env bash\n"
+        "RILL_XRAY_AGENT_INTEGRATION_SCHEMA=1\n"
+        'menu_item() { :; }\n'
+        'menu_item 9 "Rill Xray Agent"\n'
+        'case "${1:-}" in\n'
+        "    9) rxa_menu ;;\n"
+        "    --rill-agent-status) rxa_dispatch status ;;\n"
+        "esac\n"
+        + block
+        + "\n"
+    )
+
+
+GOOD = build()
 
 
 def run_guard(candidate: Path) -> int:
@@ -49,38 +66,60 @@ class Tests(unittest.TestCase):
         self.assertEqual(run_guard(self.write(body)), 1)
 
     def test_missing_menu_entry_rejected(self):
-        body = GOOD.replace('menu_item 9 "Rill Xray Agent"\n', "")
-        self.assertEqual(run_guard(self.write(body)), 1)
+        # Remove the exact wrapper line the guard anchors on (case 9 dispatch).
+        body = GOOD.replace("    9) rxa_menu ;;\n", "")
+        self.assertNotEqual(run_guard(self.write(body)), 0)
 
     def test_missing_cli_anchor_rejected(self):
-        body = GOOD.replace('    --rill-agent-status) rxa_dispatch status ;;\n', "")
-        self.assertEqual(run_guard(self.write(body)), 1)
+        body = GOOD.replace("    --rill-agent-status) rxa_dispatch status ;;\n", "")
+        self.assertNotEqual(run_guard(self.write(body)), 0)
+
+    def test_comment_only_functions_rejected(self):
+        # Strings in comments are not acceptable; the runtime probe requires
+        # real function definitions (declare -F), not grep matches.
+        block = canonical_block()
+        stripped = "\n".join(
+            "# " + line if re.match(r'^\s*rxa_\w+\(\)', line) else line
+            for line in block.splitlines()
+        )
+        body = build(stripped)
+        self.assertNotEqual(run_guard(self.write(body)), 0)
 
     def test_missing_uninstall_hook_rejected(self):
-        body = GOOD.replace("rxa_uninstall_finish() { return 0; }\n", "")
-        self.assertEqual(run_guard(self.write(body)), 1)
+        block = canonical_block()
+        body = build(re.sub(r"rxa_uninstall_finish\(\) \{.*?\n\}", "", block, count=1, flags=re.S))
+        # keep the END marker (produced by the sub) intact
+        self.assertNotEqual(run_guard(self.write(body)), 0)
 
     def test_missing_verify_hook_rejected(self):
-        body = GOOD.replace("rxa_host_healthy() { return 0; }\n", "")
-        self.assertEqual(run_guard(self.write(body)), 1)
+        block = canonical_block()
+        body = build(re.sub(r"rxa_host_healthy\(\) \{.*?\n\}", "", block, count=1, flags=re.S))
+        self.assertNotEqual(run_guard(self.write(body)), 0)
 
     def test_missing_reconfigure_hook_rejected(self):
-        body = GOOD.replace("rxa_reconfigure_enter() { return 0; }\n", "")
-        self.assertEqual(run_guard(self.write(body)), 1)
+        block = canonical_block()
+        body = build(re.sub(r"rxa_reconfigure_enter\(\) \{.*?\n\}", "", block, count=1, flags=re.S))
+        self.assertNotEqual(run_guard(self.write(body)), 0)
 
     def test_broken_shell_syntax_rejected(self):
         body = GOOD + "\nif [[ -n\n"
         self.assertEqual(run_guard(self.write(body)), 1)
 
+    def test_missing_block_markers_rejected(self):
+        block = canonical_block().replace("# BEGIN RILL XRAY AGENT INTEGRATION\n", "")
+        body = build(block)
+        self.assertEqual(run_guard(self.write(body)), 1)
+
     def test_missing_file_rejected(self):
         self.assertEqual(run_guard(self.tmp / "nope.sh"), 1)
 
-def test_apply_tool_keeps_candidate_guard(self):
-        tool = (ROOT / "integrations/xray_bash_onekey/tools/apply_to_repo.py").read_text()
+    def test_apply_tool_keeps_candidate_guard(self):
+        tool = APPLY.read_text()
         for marker in (
             "install.sh.rxa-candidate.$$",
             "rxa_candidate_guard",
             'mv -f "${_candidate}" "${' + "i" + "d" + "l" + "e" + "l" + "e" + "o" + '}"',
+            "rxa_postreplace_selfcheck",
         ):
             self.assertIn(marker, tool)
         self.assertIn("rxa_candidate_guard()", tool)

@@ -13,8 +13,9 @@ def envelope(method, body):
 
 
 class Tests(unittest.TestCase):
-    def svc(self, td, max_completed=8):
-        return RuntimeService(Path(td) / 'state', Path(td) / 'tx')
+    def svc(self, td, max_completed=2, ledger_entries=16):
+        return RuntimeService(Path(td) / 'state', Path(td) / 'tx', max_completed=max_completed,
+                              ledger_max_entries=ledger_entries)
 
     def envelope(self, method, body):
         return {'schemaVersion': 3, 'requestId': 'x1', 'capability': 'route', 'method': method, 'body': body}
@@ -36,14 +37,17 @@ class Tests(unittest.TestCase):
 
     def test_eviction_moves_to_closed_tombstone(self):
         with tempfile.TemporaryDirectory() as td:
-            svc = self.svc(td)
+            svc = self.svc(td, max_completed=2, ledger_entries=16)
             self.evict_all(svc)
             state = svc.state.load()
-            self.assertLessEqual(len(state['completed']), svc.state.max_completed)
-            self.assertEqual(len(state['closed']), 12 - len(state['completed']))
-            for did, tomb in state['closed'].items():
-                self.assertEqual(tomb['decisionIdHash'], digest(did))
-                self.assertEqual(set(tomb), {'decisionIdHash', 'identityHash', 'payloadHash', 'closedAtEpochSeconds'})
+            self.assertLessEqual(len(state['completed']), 2)
+            self.assertEqual(len(state['completed']), 2)
+            self.assertNotIn('closed', state, 'external ledger is the single source of truth')
+            ledger = svc.state.ledger
+            self.assertGreaterEqual(ledger.count(), 1)
+            entries = ledger.entries()
+            self.assertEqual(len(entries), ledger.count())
+            self.assertIsNone(state.get('closed'))
 
     def test_replay_after_eviction_idempotent(self):
         with tempfile.TemporaryDirectory() as td:
@@ -84,7 +88,7 @@ class Tests(unittest.TestCase):
 
     def test_state_api_eviction(self):
         with tempfile.TemporaryDirectory() as td:
-            st = RuntimeState(Path(td) / 's.json', max_completed=2)
+            st = RuntimeState(Path(td) / 's.json', max_completed=2, max_ledger_entries=8)
             for i in range(4):
                 did = f'q{i}'
                 st.register('route', did, 1, 1)
@@ -92,9 +96,9 @@ class Tests(unittest.TestCase):
                 st.feedback({'decisionId': did, 'capability': 'route', 'modelGeneration': 1, 'terminalPayload': {}})
             s = st.load()
             self.assertEqual(len(s['completed']), 2)
-            self.assertEqual(len(s['closed']), 2)
-            self.assertTrue(all(set(t) == {'decisionIdHash', 'identityHash', 'payloadHash', 'closedAtEpochSeconds'}
-                                for t in s['closed'].values()))
+            self.assertNotIn('closed', s, 'external ledger is the single source of truth')
+            self.assertTrue(all(set(t) == {'payloadHash', 'closedAtEpochSeconds'}
+                                for t in st.ledger.entries().values()))
             again = st.feedback({'decisionId': 'q0', 'capability': 'route', 'modelGeneration': 1, 'terminalPayload': {}})
             self.assertEqual(again['status'], 'idempotent')
             with self.assertRaises(Exception) as cm:

@@ -18,12 +18,16 @@ import sys
 from pathlib import Path
 
 # mapping: repository_files top -> Xray repo top
+# .github is deliberately NOT mapped: workflows and GitHub CI orchestration
+# on the Xray consumer are host-owned. Verifying them byte-identically would
+# create a self-reference (the workflow pins Rill's commit, which owns the
+# manifest). Xray's own workflow checks out the pinned Rill commit and
+# verifies the stable payload against that commit's canonical manifest.
 TOP_TO_XRAY = {
     "rill_payload": "rill_payload",
     "scripts": "scripts",
     "systemd": "systemd",
     "assets": "assets",
-    ".github": ".github",
 }
 
 

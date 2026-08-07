@@ -17,7 +17,7 @@ FAULTS = [
 
 
 def make_service(td):
-    svc = RuntimeService(Path(td) / 'state', Path(td) / 'tx')
+    svc = RuntimeService(Path(td) / 'state', Path(td) / 'tx', allowed_uids=[0])
     return svc
 
 
@@ -28,7 +28,7 @@ class Tests(unittest.TestCase):
     def test_mode_roundtrip_with_audit(self):
         with tempfile.TemporaryDirectory() as td:
             svc = make_service(td)
-            out = svc.handle(self.op_envelope('mode', {'mode': 'safe-disabled'}))
+            out = svc.handle(self.op_envelope('mode', {'mode': 'safe-disabled'}), 0)
             self.assertTrue(out['ok'])
             self.assertEqual(out['result']['result']['mode'], 'safe-disabled')
             cfg = svc.handle(self.op_envelope('config', {}))['result']
@@ -42,7 +42,7 @@ class Tests(unittest.TestCase):
                 os.environ[env_name] = '1'
                 try:
                     svc = make_service(td)
-                    out = svc.handle(self.op_envelope('mode', {'mode': 'normal'}))
+                    out = svc.handle(self.op_envelope('mode', {'mode': 'normal'}), 0)
                     self.assertFalse(out['ok'], f'{env_name} should fail')
                 finally:
                     os.environ.pop(env_name, None)
@@ -79,7 +79,7 @@ class Tests(unittest.TestCase):
     def test_no_double_audit_on_restart_replay(self):
         with tempfile.TemporaryDirectory() as td:
             svc = make_service(td)
-            out = svc.handle(self.op_envelope('mode', {'mode': 'observe-only'}))
+            out = svc.handle(self.op_envelope('mode', {'mode': 'observe-only'}), 0)
             self.assertTrue(out['ok'])
             svc2 = make_service(td)
             self.assertEqual(svc2.audit.verify()['events'], 1)

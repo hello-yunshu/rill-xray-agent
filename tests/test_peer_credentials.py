@@ -9,6 +9,7 @@ from pathlib import Path
 
 from rill_xray_agent.canonical import canonical_bytes
 from rill_xray_agent.payload_policy import sanitize_payload
+from rill_xray_agent.peer_auth import AccessControl
 from rill_xray_agent.runtime_service import RuntimeService
 
 
@@ -34,7 +35,7 @@ class Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             r = Path(td)
             sock = r / 'r.sock'
-            svc = RuntimeService(r / 'state', r / 'tx')
+            svc = RuntimeService(r / 'state', r / 'tx', allowed_uids=[os.getuid()])
             t = threading.Thread(target=svc.serve, args=(sock,), daemon=True)
             t.start()
             try:
@@ -68,6 +69,33 @@ class Tests(unittest.TestCase):
             finally:
                 svc.stop()
                 t.join(timeout=3)
+
+    def test_acl_default_is_fail_closed(self):
+        # No allowlist must mean deny-everyone, never open.
+        with tempfile.TemporaryDirectory() as td:
+            r = Path(td)
+            sock = r / 'r.sock'
+            svc = RuntimeService(r / 'state', r / 'tx')
+            self.assertEqual(svc.acl.describe()['mode'], 'allowlist')
+            self.assertEqual(svc.acl.describe()['allowedUids'], [])
+            self.assertFalse(svc.acl.authorize((12345, os.getuid(), 1)))
+            t = threading.Thread(target=svc.serve, args=(sock,), daemon=True)
+            t.start()
+            try:
+                out = self.request(sock, {'schemaVersion': 3, 'requestId': 'x', 'capability': 'route',
+                                          'method': 'health', 'body': {}})
+                self.assertFalse(out['ok'], out)
+                self.assertEqual(out['error']['code'], 'forbiddenPeer')
+            finally:
+                svc.stop()
+                t.join(timeout=3)
+
+    def test_acl_unknown_peer_creds_rejected(self):
+        self.assertFalse(AccessControl([os.getuid()]).authorize(None))
+        self.assertFalse(AccessControl([os.getuid()]).authorize((1, None, None)))
+        self.assertFalse(AccessControl([]).authorize((1, os.getuid(), 1)))
+        self.assertFalse(AccessControl().write_permitted(None))
+        self.assertFalse(AccessControl().write_permitted(os.getuid()))
 
     def test_concurrency_limit_rejects_when_full(self):
         with tempfile.TemporaryDirectory() as td:
@@ -104,7 +132,7 @@ class Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             r = Path(td)
             sock = r / 'r.sock'
-            svc = RuntimeService(r / 'state', r / 'tx')
+            svc = RuntimeService(r / 'state', r / 'tx', allowed_uids=[os.getuid()])
             t = threading.Thread(target=svc.serve, args=(sock,), daemon=True)
             t.start()
             try:
