@@ -1,0 +1,236 @@
++ /usr/local/bin/python3 scripts/validate_schemas.py (timeout=30s)
+schemas passed (2)
++ /usr/local/bin/python3 scripts/verify_xray_integration.py (timeout=90s)
+xray integration passed (9 required paths; source/payload/bundle/version drift-free)
++ /usr/local/bin/python3 scripts/rust_static_sanity.py (timeout=30s)
+Rust experimental source sanity passed (3 files; publish=false; NOT compiled or supported)
++ /usr/local/bin/python3 scripts/verify_package_sums.py (timeout=30s)
+package sums passed (157)
++ /usr/local/bin/python3 scripts/verify_package_tree.py (timeout=30s)
+package tree passed (14 required paths; identity clean)
++ /usr/local/bin/python3 scripts/verify_project_memory.py (timeout=30s)
+project memory passed (15 records)
++ /usr/local/bin/python3 scripts/run_python_tests.py (timeout=180s)
++ /usr/local/bin/python3 -m unittest -v test_agent_acl
+test_agent_allows_operator_write_forbidden_method_from_operator (test_agent_acl.Tests.test_agent_allows_operator_write_forbidden_method_from_operator) ... ok
+test_agent_default_is_fail_closed (test_agent_acl.Tests.test_agent_default_is_fail_closed) ... ok
+test_method_role_policy (test_agent_acl.Tests.test_method_role_policy) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.050s
+
+OK
++ /usr/local/bin/python3 -m unittest -v test_closed_ledger
+test_eviction_moves_to_closed_tombstone (test_closed_ledger.Tests.test_eviction_moves_to_closed_tombstone) ... ok
+test_ledger_externalized_on_disk (test_closed_ledger.Tests.test_ledger_externalized_on_disk) ... ok
+test_put_hashed_capacity_with_identical_idempotent (test_closed_ledger.Tests.test_put_hashed_capacity_with_identical_idempotent)
+P0-2A: at capacity, a repeated identical entry stays idempotent ... ok
+test_put_hashed_conflict_fails_closed (test_closed_ledger.Tests.test_put_hashed_conflict_fails_closed)
+P0-2A: same decision, differing identity or payload -> fail closed ... ok
+test_put_hashed_identical_tombstone_idempotent (test_closed_ledger.Tests.test_put_hashed_identical_tombstone_idempotent)
+P0-2A: the identical tombstone must succeed regardless of the ... ok
+test_register_different_identity_after_eviction_conflict (test_closed_ledger.Tests.test_register_different_identity_after_eviction_conflict) ... ok
+test_register_same_identity_after_eviction_idempotent (test_closed_ledger.Tests.test_register_same_identity_after_eviction_idempotent) ... ok
+test_replay_after_eviction_idempotent (test_closed_ledger.Tests.test_replay_after_eviction_idempotent) ... ok
+test_replay_conflict_after_eviction (test_closed_ledger.Tests.test_replay_conflict_after_eviction) ... ok
+test_single_feedback_transaction_entry (test_closed_ledger.Tests.test_single_feedback_transaction_entry) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 1.883s
+
+OK
++ /usr/local/bin/python3 -m unittest -v test_legacy_closed_migration
+test_atomic_write_failure_retains_and_retries (test_legacy_closed_migration.LegacyClosedMigration.test_atomic_write_failure_retains_and_retries) ... ok
+test_conflicting_existing_tombstone_fail_closed (test_legacy_closed_migration.LegacyClosedMigration.test_conflicting_existing_tombstone_fail_closed) ... ok
+test_corrupt_target_tombstone_fail_closed (test_legacy_closed_migration.LegacyClosedMigration.test_corrupt_target_tombstone_fail_closed) ... ok
+test_identical_existing_tombstone_idempotent (test_legacy_closed_migration.LegacyClosedMigration.test_identical_existing_tombstone_idempotent) ... ok
+test_ledger_full_mid_migration_fail_closed (test_legacy_closed_migration.LegacyClosedMigration.test_ledger_full_mid_migration_fail_closed) ... ok
+test_ledger_io_error_fail_closed (test_legacy_closed_migration.LegacyClosedMigration.test_ledger_io_error_fail_closed) ... ok
+test_migration_success (test_legacy_closed_migration.LegacyClosedMigration.test_migration_success) ... ok
+test_partial_migration_then_restart (test_legacy_closed_migration.LegacyClosedMigration.test_partial_migration_then_restart) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.018s
+
+OK
++ /usr/local/bin/python3 -m unittest -v test_mode_transaction
+test_fresh_install_observe_only_enables_all_units (test_mode_transaction.ModeTransaction.test_fresh_install_observe_only_enables_all_units) ... ok
+test_invalid_mode_rejected (test_mode_transaction.ModeTransaction.test_invalid_mode_rejected) ... ok
+test_observe_failure_rolls_back (test_mode_transaction.ModeTransaction.test_observe_failure_rolls_back) ... ok
+test_runtime_rejection_rolls_back (test_mode_transaction.ModeTransaction.test_runtime_rejection_rolls_back) ... ok
+test_safe_disabled_repeat_converges_and_stays_disabled (test_mode_transaction.ModeTransaction.test_safe_disabled_repeat_converges_and_stays_disabled) ... ok
+test_same_mode_agent_stopped_is_repaired (test_mode_transaction.ModeTransaction.test_same_mode_agent_stopped_is_repaired) ... ok
+test_same_mode_observe_path_disabled_is_repaired (test_mode_transaction.ModeTransaction.test_same_mode_observe_path_disabled_is_repaired) ... ok
+test_same_mode_observe_timer_disabled_is_repaired (test_mode_transaction.ModeTransaction.test_same_mode_observe_timer_disabled_is_repaired) ... ok
+test_same_mode_runtime_drift_repaired (test_mode_transaction.ModeTransaction.test_same_mode_runtime_drift_repaired) ... ok
+test_same_mode_stale_observation_refreshed (test_mode_transaction.ModeTransaction.test_same_mode_stale_observation_refreshed) ... ok
+test_same_mode_unit_activation_failure_rolls_back (test_mode_transaction.ModeTransaction.test_same_mode_unit_activation_failure_rolls_back) ... ok
+test_switch_to_normal_commits_all_parties (test_mode_transaction.ModeTransaction.test_switch_to_normal_commits_all_parties) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.837s
+
+OK
++ /usr/local/bin/python3 -m unittest -v test_observer_real_paths
+test_core_never_mentions_host_identity (test_observer_real_paths.Tests.test_core_never_mentions_host_identity) ... ok
+test_manager_has_transaction_helpers (test_observer_real_paths.Tests.test_manager_has_transaction_helpers) ... ok
+test_observe_path_watches_real_xray_config (test_observer_real_paths.Tests.test_observe_path_watches_real_xray_config) ... ok
+test_observe_service_env_maps_to_real_root (test_observer_real_paths.Tests.test_observe_service_env_maps_to_real_root) ... ok
+test_observer_default_is_real_host_root (test_observer_real_paths.Tests.test_observer_default_is_real_host_root) ... ok
+test_observer_produces_valid_observation_for_real_layout (test_observer_real_paths.Tests.test_observer_produces_valid_observation_for_real_layout) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.021s
+
+OK
++ /usr/local/bin/python3 -m unittest -v test_operation_atomicity
+test_audit_capacity_fail_closed (test_operation_atomicity.Tests.test_audit_capacity_fail_closed) ... ok
+test_fault_injection_recovery (test_operation_atomicity.Tests.test_fault_injection_recovery) ... ok
+test_mode_roundtrip_with_audit (test_operation_atomicity.Tests.test_mode_roundtrip_with_audit) ... ok
+test_no_double_audit_on_restart_replay (test_operation_atomicity.Tests.test_no_double_audit_on_restart_replay) ... ok
+test_register_feedback_flow_atomic (test_operation_atomicity.Tests.test_register_feedback_flow_atomic) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.089s
+
+OK
++ /usr/local/bin/python3 -m unittest -v test_operation_ledger_fault_matrix
+test_eviction_audit_reserve_failure (test_operation_ledger_fault_matrix.WALLedgerFaultMatrix.test_eviction_audit_reserve_failure) ... ok
+test_eviction_fault_after_intent (test_operation_ledger_fault_matrix.WALLedgerFaultMatrix.test_eviction_fault_after_intent) ... ok
+test_eviction_state_ledger_audit_terminal_faults (test_operation_ledger_fault_matrix.WALLedgerFaultMatrix.test_eviction_state_ledger_audit_terminal_faults) ... ok
+test_ledger_full (test_operation_ledger_fault_matrix.WALLedgerFaultMatrix.test_ledger_full) ... ok
+test_ledger_io_error_then_recovery (test_operation_ledger_fault_matrix.WALLedgerFaultMatrix.test_ledger_io_error_then_recovery) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.352s
+
+OK
++ /usr/local/bin/python3 -m unittest -v test_package_identity
+test_default_is_fail_closed (test_package_identity.Tests.test_default_is_fail_closed) ... ok
+test_forbidden_identity_is_absent (test_package_identity.Tests.test_forbidden_identity_is_absent) ... ok
+test_identity (test_package_identity.Tests.test_identity) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.083s
+
+OK
++ /usr/local/bin/python3 -m unittest -v test_peer_credentials
+test_acl_blocks_other_uid (test_peer_credentials.Tests.test_acl_blocks_other_uid) ... ok
+test_acl_default_is_fail_closed (test_peer_credentials.Tests.test_acl_default_is_fail_closed) ... ok
+test_acl_unknown_peer_creds_rejected (test_peer_credentials.Tests.test_acl_unknown_peer_creds_rejected) ... ok
+test_concurrency_limit_rejects_when_full (test_peer_credentials.Tests.test_concurrency_limit_rejects_when_full) ... ok
+test_feedback_rejects_xray_config_body (test_peer_credentials.Tests.test_feedback_rejects_xray_config_body) ... ok
+test_payload_allowlist_redacts_and_rejects (test_peer_credentials.Tests.test_payload_allowlist_redacts_and_rejects) ... ok
+test_peer_credentials_recorded (test_peer_credentials.Tests.test_peer_credentials_recorded) ... ok
+test_service_never_stores_forbidden_data (test_peer_credentials.Tests.test_service_never_stores_forbidden_data) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.209s
+
+OK
++ /usr/local/bin/python3 -m unittest -v test_public_repository_hygiene
+test_archive_members_have_no_prompt_material (test_public_repository_hygiene.Tests.test_archive_members_have_no_prompt_material) ... ok
+test_governance_text_is_allowed (test_public_repository_hygiene.Tests.test_governance_text_is_allowed) ... ok
+test_no_prompt_files_anywhere (test_public_repository_hygiene.Tests.test_no_prompt_files_anywhere) ... ok
+test_project_memory_has_no_prompt_body (test_public_repository_hygiene.Tests.test_project_memory_has_no_prompt_body) ... ok
+test_required_delivery_paths_still_present (test_public_repository_hygiene.Tests.test_required_delivery_paths_still_present) ... ok
+test_worktree_no_prompt_paths (test_public_repository_hygiene.Tests.test_worktree_no_prompt_paths) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 1.112s
+
+OK
++ /usr/local/bin/python3 -m unittest -v test_reliability
+test_audit_recovery (test_reliability.Tests.test_audit_recovery) ... ok
+test_backup_symlink_no_escape (test_reliability.Tests.test_backup_symlink_no_escape) ... ok
+test_commit_bundle_recovery (test_reliability.Tests.test_commit_bundle_recovery) ... ok
+test_identity_conflict (test_reliability.Tests.test_identity_conflict) ... ok
+test_invalid_recommendation_id_rejected (test_reliability.Tests.test_invalid_recommendation_id_rejected) ... ok
+test_nested_transaction_health (test_reliability.Tests.test_nested_transaction_health) ... ok
+test_rollback_restores_managed (test_reliability.Tests.test_rollback_restores_managed) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.085s
+
+OK
++ /usr/local/bin/python3 -m unittest -v test_root_recovery_readonly
+test_committed_history_unchanged_on_startup (test_root_recovery_readonly.ReadOnlyRecoveryTests.test_committed_history_unchanged_on_startup) ... ok
+test_incomplete_startup_recovery_required_readonly (test_root_recovery_readonly.ReadOnlyRecoveryTests.test_incomplete_startup_recovery_required_readonly) ... ok
+test_rollback_unverified_is_never_safe (test_root_recovery_readonly.ReadOnlyRecoveryTests.test_rollback_unverified_is_never_safe) ... ok
+test_scan_is_read_only (test_root_recovery_readonly.ReadOnlyRecoveryTests.test_scan_is_read_only) ... ok
+test_systemd_readonly_contract_static (test_root_recovery_readonly.ReadOnlyRecoveryTests.test_systemd_readonly_contract_static) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.065s
+
+OK
++ /usr/local/bin/python3 -m unittest -v test_root_txn_recovery
+test_fault_at_each_commit_point_recoverable (test_root_txn_recovery.Tests.test_fault_at_each_commit_point_recoverable) ... ok
+test_fault_at_each_rollback_point_recoverable (test_root_txn_recovery.Tests.test_fault_at_each_rollback_point_recoverable) ... ok
+test_full_state_machine_committed (test_root_txn_recovery.Tests.test_full_state_machine_committed) ... ok
+test_hash_directory_is_used (test_root_txn_recovery.Tests.test_hash_directory_is_used) ... ok
+test_health_recovery_required_for_incomplete (test_root_txn_recovery.Tests.test_health_recovery_required_for_incomplete) ... ok
+test_recommendation_id_never_a_path (test_root_txn_recovery.Tests.test_recommendation_id_never_a_path) ... ok
+test_rollback_recovery_for_each_intermediate_state (test_root_txn_recovery.Tests.test_rollback_recovery_for_each_intermediate_state) ... ok
+test_rollback_state_machine (test_root_txn_recovery.Tests.test_rollback_state_machine) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.405s
+
+OK
++ /usr/local/bin/python3 -m unittest -v test_route_assist_invariant
+test_config_and_snapshot_always_false (test_route_assist_invariant.RouteAssistInvariant.test_config_and_snapshot_always_false) ... ok
+test_legacy_true_normalized_on_load (test_route_assist_invariant.RouteAssistInvariant.test_legacy_true_normalized_on_load) ... ok
+test_legacy_true_through_full_cycle (test_route_assist_invariant.RouteAssistInvariant.test_legacy_true_through_full_cycle) ... ok
+test_mode_command_never_resurrects (test_route_assist_invariant.RouteAssistInvariant.test_mode_command_never_resurrects) ... ok
+test_restart_keeps_false (test_route_assist_invariant.RouteAssistInvariant.test_restart_keeps_false) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.058s
+
+OK
++ /usr/local/bin/python3 -m unittest -v test_runtime
+test_reset_forbidden (test_runtime.Tests.test_reset_forbidden) ... ok
+test_runtime_ipc (test_runtime.Tests.test_runtime_ipc) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.028s
+
+OK
++ /usr/local/bin/python3 -m unittest -v test_update_guard
+test_apply_tool_keeps_candidate_guard (test_update_guard.Tests.test_apply_tool_keeps_candidate_guard) ... ok
+test_broken_shell_syntax_rejected (test_update_guard.Tests.test_broken_shell_syntax_rejected) ... ok
+test_comment_only_functions_rejected (test_update_guard.Tests.test_comment_only_functions_rejected) ... ok
+test_good_candidate_passes (test_update_guard.Tests.test_good_candidate_passes) ... ok
+test_missing_block_markers_rejected (test_update_guard.Tests.test_missing_block_markers_rejected) ... ok
+test_missing_cli_anchor_rejected (test_update_guard.Tests.test_missing_cli_anchor_rejected) ... ok
+test_missing_file_rejected (test_update_guard.Tests.test_missing_file_rejected) ... ok
+test_missing_menu_entry_rejected (test_update_guard.Tests.test_missing_menu_entry_rejected) ... ok
+test_missing_reconfigure_hook_rejected (test_update_guard.Tests.test_missing_reconfigure_hook_rejected) ... ok
+test_missing_schema_marker_rejected (test_update_guard.Tests.test_missing_schema_marker_rejected) ... ok
+test_missing_uninstall_hook_rejected (test_update_guard.Tests.test_missing_uninstall_hook_rejected) ... ok
+test_missing_verify_hook_rejected (test_update_guard.Tests.test_missing_verify_hook_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.234s
+
+OK
++ /usr/local/bin/python3 -m unittest -v test_wal_mutation_fence
+test_mode_mutation_fenced_and_config_read_safe (test_wal_mutation_fence.WALMutationFence.test_mode_mutation_fenced_and_config_read_safe) ... ok
+test_pending_intent_blocks_register_even_idempotent (test_wal_mutation_fence.WALMutationFence.test_pending_intent_blocks_register_even_idempotent) ... ok
+test_replay_gap_eviction_full_ledger_blocked_until_resolved (test_wal_mutation_fence.WALMutationFence.test_replay_gap_eviction_full_ledger_blocked_until_resolved) ... ok
+test_single_fault_within_eviction_blocks_all_mutations (test_wal_mutation_fence.WALMutationFence.test_single_fault_within_eviction_blocks_all_mutations) ... ok
+test_stale_wal_never_overwrites_post_recovery_state (test_wal_mutation_fence.WALMutationFence.test_stale_wal_never_overwrites_post_recovery_state) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.459s
+
+OK
+isolated Python test modules passed (17; seed=0)
++ /usr/local/bin/python3 scripts/build_canonical_manifest.py --check (timeout=30s)
+canonical payload sync passed: 61 files, bundle 1a9286a5448a
+all source/process gates passed; seed=3; real-host gates remain open
+----------------------------------------------------------------------
+Ran 58 tests in 3.732s
+
+OK
