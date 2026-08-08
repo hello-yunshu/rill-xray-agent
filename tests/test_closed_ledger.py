@@ -119,6 +119,47 @@ class Tests(unittest.TestCase):
             self.assertIsNone(ledger.get('never'))
             self.assertFalse((Path(td) / 'ledger' / f'{digest("d0")}.json').read_text().__contains__('decision0_id'))
 
+    def test_put_hashed_identical_tombstone_idempotent(self):
+        """P0-2A: the identical tombstone must succeed regardless of the
+        replay window (even inside it) instead of failing as ledger full."""
+        from rill_xray_agent.state import ClosedLedger
+        with tempfile.TemporaryDirectory() as td:
+            ledger = ClosedLedger(Path(td) / 'l1', max_entries=1,
+                                  replay_protection_seconds=21600)
+            ledger.put('d0', digest('id0'), digest('p0'), 1000)  # inside window now
+            self.assertTrue(ledger.put('d0', digest('id0'), digest('p0'), 1000),
+                            'identical tombstone must be idempotent in-window')
+            self.assertEqual(ledger.count(), 1)
+
+    def test_put_hashed_conflict_fails_closed(self):
+        """P0-2A: same decision, differing identity or payload -> fail closed
+        even when the replay window has expired."""
+        from rill_xray_agent.state import ClosedLedger
+        with tempfile.TemporaryDirectory() as td:
+            ledger = ClosedLedger(Path(td) / 'l2', max_entries=4,
+                                  replay_protection_seconds=1)
+            ledger.put_hashed(digest('d0'), digest('id0'), digest('p0'), 1000 - 100000)
+            with self.assertRaises(Exception) as cm:
+                ledger.put_hashed(digest('d0'), digest('id1'), digest('p0'), 1000)
+            self.assertEqual(cm.exception.__class__.__name__, 'LedgerFullError')
+            with self.assertRaises(Exception) as cm:
+                ledger.put_hashed(digest('d0'), digest('id0'), digest('p1'), 1000)
+            self.assertEqual(cm.exception.__class__.__name__, 'LedgerFullError')
+            self.assertEqual(ledger.count(), 1, 'conflict must not add entries')
+
+    def test_put_hashed_capacity_with_identical_idempotent(self):
+        """P0-2A: at capacity, a repeated identical entry stays idempotent
+        while a genuinely new entry fails closed."""
+        from rill_xray_agent.state import ClosedLedger
+        with tempfile.TemporaryDirectory() as td:
+            ledger = ClosedLedger(Path(td) / 'l3', max_entries=1)
+            ledger.put_hashed(digest('d0'), digest('id0'), digest('p0'), 1000)
+            self.assertTrue(ledger.put_hashed(digest('d0'), digest('id0'), digest('p0'), 1000),
+                            'identical at capacity must still be idempotent')
+            with self.assertRaises(Exception) as cm:
+                ledger.put_hashed('d1', digest('id1'), digest('p1'), 1000)
+            self.assertEqual(cm.exception.__class__.__name__, 'LedgerFullError')
+
 
 if __name__ == '__main__':
     unittest.main()

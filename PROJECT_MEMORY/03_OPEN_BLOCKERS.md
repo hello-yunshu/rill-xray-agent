@@ -1,8 +1,10 @@
-# Open blockers
+# Open blockers (2026-08-08)
 
-- Apply integration to the current Xray branch and run mandatory CI
-- ShellCheck
-- real PID1/systemd lifecycle
-- real Xray/Nginx/Fail2ban qualification
-- clean install, upgrade, reinstall and rollback on supported distributions
-- independent zero-P0 audit
+- Real-host (non-Docker) systemd / Xray / Nginx / Fail2ban qualification:
+  this round is Docker-only by policy; real-host remains blocked.
+- PUBLIC PROMPT PURGE (P0-1): the leaked `00_总执行提示词.md` blob
+  (7b7a2ccf…) remains fetchable on GitHub and returns HTTP 200. It is
+  reachable only by orphaned SHA — no longer reachable from any ref — but
+  GitHub Support is the only official purge path and it is not automatable.
+  Mitigation holds: known-blob denylist + docs-only content signatures.
+- Nothing else is open for this Docker-only round.
