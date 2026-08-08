@@ -52,10 +52,6 @@ def subprocess_check(argv: list[str]) -> str:
     return subprocess.run(argv, cwd=ROOT, check=True, capture_output=True, text=True).stdout.strip()
 
 
-def source_commit() -> str:
-    return subprocess_check(["git", "rev-parse", "HEAD"])
-
-
 def build_bundle() -> bytes:
     raw = io.BytesIO()
     with tarfile.open(fileobj=raw, mode="w", format=tarfile.GNU_FORMAT) as tar:
@@ -128,7 +124,9 @@ def compute_manifest() -> dict:
     bundle = build_bundle()
     return {
         "schemaVersion": 1,
-        "sourceCommit": source_commit(),
+        # No sourceCommit here: provenance is anchored externally by the Xray
+        # consumer workflow's RILL_CANONICAL_COMMIT pin (the commit that owns
+        # this manifest). Embedding it would be stale or self-referential.
         "bundleSha256": sha_bytes(bundle),
         "files": dict(sorted(files.items())),
     }
@@ -182,15 +180,15 @@ def verify() -> int:
     check_bundle_copies(committed["bundleSha256"])
     check_bootstrap_pin(committed["bundleSha256"])
     print(f"canonical payload sync passed: {len(committed['files'])} files, "
-          f"bundle {committed['bundleSha256'][:12]}, sourceCommit {committed['sourceCommit'][:12]}")
+          f"bundle {committed['bundleSha256'][:12]}")
     return 0
 
 
 def build() -> None:
     manifest = compute_manifest()
     MANIFEST.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
-    print(f"wrote {MANIFEST} (sourceCommit {manifest['sourceCommit'][:12]}, "
-          f"files={len(manifest['files'])}, bundle={manifest['bundleSha256'][:12]})")
+    print(f"wrote {MANIFEST} (files={len(manifest['files'])}, "
+          f"bundle={manifest['bundleSha256'][:12]})")
 
 
 if __name__ == "__main__":

@@ -49,8 +49,13 @@ FORBIDDEN_PATH_PATTERNS = (
     re.compile(r"(^|/)[p][r][o][m][p][t][s]?/?$"),
 )
 
-# B. Known leaked prompt-file blob hashes (sha256). Append as leaks are found.
-KNOWN_FORBIDDEN_BLOB_HASHES = frozenset({})
+# B. Known leaked prompt-file blob hashes (sha256 of file content). Append as
+# leaks are found. The first entry is the confirmed `00_总执行提示词.md` blob
+# from orphaned commit 52d7632 (still fetchable on GitHub by SHA) - see P0-1.
+KNOWN_FORBIDDEN_BLOB_HASHES = frozenset({
+    # 00_总执行提示词.md (Rill Xray Agent 总执行提示词)
+    "7b7a2ccf1d65925fe8594afb651646f04694d632aa7dc05bf60d16853f4b80ea",
+})
 
 # C. High-confidence multi-feature content signatures. All anchors of at
 # least one group must appear in the SAME file to flag it.
@@ -106,43 +111,115 @@ def scan_worktree() -> list[str]:
             blob = hashlib.sha256(path.read_bytes()).hexdigest()
             if blob in KNOWN_FORBIDDEN_BLOB_HASHES:
                 problems.append(f"known forbidden blob: {rel}")
-            if not content_exempt:
+            if not content_exempt and _doc_like(rel):
                 marker = forbidden_content(path)
                 if marker:
                     problems.append(f"prompt-body signature ({marker}): {rel}")
     return problems
 
 
+def _blob_content_sha256(blob_id: str) -> str | None:
+    try:
+        return hashlib.sha256(
+            subprocess.check_output(["git", "cat-file", "blob", blob_id], cwd=ROOT)
+        ).hexdigest()
+    except Exception:
+        return None
+
+
+def _doc_like(name: str) -> bool:
+    """Content-signature scanning is restricted to documentation-like blobs
+    (.md/.txt/.rst with any basename), because source files legitimately embed
+    the anchor phrases (for example this scanner's own docstring)."""
+    lowered = name.lower()
+    return lowered.endswith((".md", ".txt", ".rst", ".markdown", ".adoc"))
+
+
 def refs_scan() -> list[str]:
+    """Scan all git-reachable history (every ref + every tag) for:
+       - forbidden paths (with quotepath disabled so non-ASCII names are
+         matched literally, fixing the old escaped-name blind spot);
+       - known forbidden blob hashes (sha256 of raw content);
+       - high-confidence prompt-body content signatures.
+    This is a git-reachable hygiene gate only; it does NOT cover orphaned
+    objects that GitHub retains by SHA (see P0-1)."""
     problems = []
     if not (ROOT / ".git").exists():
         return problems
-    for ref in subprocess.check_output(["git", "rev-list", "--all"], cwd=ROOT, text=True).split():
+
+    revs = subprocess.check_output(
+        ["git", "rev-list", "--all"], cwd=ROOT, text=True
+    ).split()
+    for ref in revs:
         try:
             names = subprocess.check_output(
-                ["git", "ls-tree", "-r", "--name-only", ref], cwd=ROOT, text=True
+                ["git", "-c", "core.quotepath=false", "ls-tree", "-r", "--name-only", ref],
+                cwd=ROOT, text=True,
             ).splitlines()
         except subprocess.CalledProcessError:
             continue
         for name in names:
             if forbidden_path(name):
                 problems.append(f"forbidden path in ref {ref[:12]}: {name}")
-        blob_hash = subprocess.check_output(
-            ["git", "rev-parse", f"{ref}^{{tree}}"], cwd=ROOT, text=True
-        ).strip()
-        _ = blob_hash  # tree-level check is covered by ls-tree above
+
     for ref in subprocess.check_output(
         ["git", "for-each-ref", "--format=%(refname)", "refs/tags"], cwd=ROOT, text=True
     ).split():
         try:
             names = subprocess.check_output(
-                ["git", "ls-tree", "-r", "--name-only", ref], cwd=ROOT, text=True
+                ["git", "-c", "core.quotepath=false", "ls-tree", "-r", "--name-only", ref],
+                cwd=ROOT, text=True,
             ).splitlines()
         except subprocess.CalledProcessError:
             continue
         for name in names:
             if forbidden_path(name):
                 problems.append(f"forbidden path in tag {ref}: {name}")
+
+    # Reachable blob hashing: check raw content against the known-forbidden
+    # set and the content signature. Deduplicate by git blob id; the
+    # ls-tree walk above supplies path names, so build an id->path map for
+    # documentation-likeness (content signatures apply to .md/.txt only).
+    seen = set()
+    doc_paths = {}
+    for line in subprocess.check_output(
+        ["git", "rev-list", "--all", "--objects"], cwd=ROOT, text=True
+    ).splitlines():
+        parts = line.split(" ", 1)
+        blob_id = parts[0]
+        if not blob_id:
+            continue
+        if blob_id in seen:
+            continue
+        seen.add(blob_id)
+        if len(parts) == 2 and _doc_like(parts[1].split("\t")[-1]):
+            doc_paths[blob_id] = parts[1].split("\t")[-1]
+        try:
+            if subprocess.check_output(["git", "cat-file", "-t", blob_id], cwd=ROOT,
+                                       text=True).strip() != "blob":
+                continue
+        except subprocess.CalledProcessError:
+            continue
+        sha = _blob_content_sha256(blob_id)
+        if sha and sha in KNOWN_FORBIDDEN_BLOB_HASHES:
+            problems.append(f"known forbidden blob hash in reachable history: {blob_id[:12]}")
+        try:
+            raw = subprocess.check_output(["git", "cat-file", "blob", blob_id], cwd=ROOT)
+        except subprocess.CalledProcessError:
+            continue
+        # Content signatures apply to documentation-like blobs only. Source
+        # files legitimately embed the anchor phrases (e.g. this scanner's own
+        # docstring), so only .md/.txt/.rst blobs are signature-scanned.
+        if blob_id not in doc_paths:
+            continue
+        tmp = Path(__file__).parent / f".hygiene-blob-{blob_id[:12]}"
+        tmp.write_bytes(raw)
+        try:
+            marker = forbidden_content(tmp)
+            if marker:
+                problems.append(f"prompt-body signature ({marker}) in reachable blob {blob_id[:12]}")
+        finally:
+            tmp.unlink(missing_ok=True)
     return problems
 
 

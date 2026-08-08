@@ -29,7 +29,7 @@ case "$cmd" in
         ;;
     config)
         mode=$(cat "${RXA_RUNTIME_STATE}" 2>/dev/null || printf 'observe-only')
-        printf '%s\\n' "{\\"ok\\":true,\\"result\\":{\\"mode\\":\\"${mode}\\"}}"
+        printf '%s\n' "{\\"ok\\":true,\\"result\\":{\\"mode\\":\\"${mode}\\",\\"routeAssistEnabled\\":false,\\"boundedAutoAllowed\\":false}}"
         ;;
     *) exit 66 ;;
 esac

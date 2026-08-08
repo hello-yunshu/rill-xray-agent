@@ -64,6 +64,11 @@
       "path": "history/2026-08-07-ci-green.md",
       "previousSha256": "58ed2db32d3f9eebd791f256931c384ab5d563edbc236244ff630b0e9d53c2e7",
       "sha256": "89992251ebfb24c4dd21fb3c3f755caa2344887f73595f77c1c3d36f29d41848"
+    },
+    {
+      "path": "history/2026-08-08-final-audit-docker.md",
+      "previousSha256": "89992251ebfb24c4dd21fb3c3f755caa2344887f73595f77c1c3d36f29d41848",
+      "sha256": "0d58500a219991fc0875f0e4748e2581b26c2deaa31f6bd3057130595ff44c22"
     }
   ],
   "schemaVersion": 1

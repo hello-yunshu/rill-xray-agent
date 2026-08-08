@@ -38,7 +38,8 @@ def sha(path: Path) -> str:
 def verify(xray: Path, manifest: Path, allow_missing_github: bool = True) -> int:
     m = json.loads(manifest.read_text())
     assert m.get("schemaVersion") == 1, "unsupported manifest schema"
-    assert re.fullmatch(r"[0-9a-f]{40}", m["sourceCommit"]), "sourceCommit not a sha"
+    # No sourceCommit in the manifest: provenance is anchored by the consumer
+    # workflow's RILL_CANONICAL_COMMIT pin, not embedded in-file.
     checked = 0
     for rel, expected in m["files"].items():
         if not rel.startswith("repository_files/"):
@@ -80,7 +81,7 @@ def verify(xray: Path, manifest: Path, allow_missing_github: bool = True) -> int
         return 1
     print(
         f"xray payload matches canonical manifest {manifest.parent.name}/"
-        f"{manifest.name}@{m['sourceCommit'][:12]}: {checked} files, "
+        f"{manifest.name}: {checked} files, "
         f"bundle {bundle_sha[:12]}"
     )
     return 0
