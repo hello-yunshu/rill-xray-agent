@@ -202,12 +202,34 @@ class WALLedgerFaultMatrix(unittest.TestCase):
                              'recovery-required')
             tomb = svc2.state.ledger.get('d0')
             self.assertIsNotNone(tomb, 'd0 tombstone must be retained')
+            # P0-2 global mutation fence: while the unfinished eviction intent
+            # is pending, even an identical replay is fail-closed (never
+            # idempotent) -- state mutation is fenced until recovery.
+            same = svc2.handle(envelope('feedback', {'decisionId': 'd0', 'capability': 'route',
+                                                     'modelGeneration': 1, 'terminalPayload': {'r': 1}}))
+            self.assertFalse(same['ok'], 'identical replay must be fenced while recovery is pending')
+            self.assertEqual(same['error']['code'], 'recoveryRequired')
+            # Resolve the capacity obstruction (aged-out entry purged by the
+            # operator), then recover: the fence lifts and the healed d1
+            # tombstone resumes replay-protection semantics.
+            from rill_xray_agent.canonical import digest
+            stale = Path(td) / 'state' / 'closed-ledger' / f'{digest("d0")}.json'
+            stale.unlink()
+            svc2.ops.recover()
+            self.assertEqual(svc2.ops.pending_count(), 0)
+            self.assertEqual(svc2.handle(envelope('health', {}))['result']['status'], 'ready')
+            healed = svc2.state.ledger.get('d1')
+            self.assertIsNotNone(healed, 'recovery must externalize the d1 eviction')
+            self.assertFalse(healed.get('corrupt'))
             self.assert_replay_protection(
-                svc2, 'd0',
-                {'decisionId': 'd0', 'capability': 'route', 'modelGeneration': 1,
+                svc2, 'd1',
+                {'decisionId': 'd1', 'capability': 'route', 'modelGeneration': 1,
                  'terminalPayload': {'r': 1}},
-                {'decisionId': 'd0', 'capability': 'route', 'modelGeneration': 1,
+                {'decisionId': 'd1', 'capability': 'route', 'modelGeneration': 1,
                  'terminalPayload': {'r': 999}})
+            out = svc2.handle(envelope('register', {'capability': 'route', 'decisionId': 'd3',
+                                                    'modelGeneration': 1, 'createdAtEpochSeconds': 1}))
+            self.assertTrue(out['ok'], 'fence must lift after recovery')
 
     def test_ledger_io_error_then_recovery(self):
         with tempfile.TemporaryDirectory() as td:

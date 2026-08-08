@@ -86,24 +86,46 @@ class Tests(unittest.TestCase):
             self.assertFalse(out['ok'], out)
             self.assertEqual(out['error']['code'], 'contractViolation')
 
-    def test_state_api_eviction(self):
+    def test_single_feedback_transaction_entry(self):
+        # P1: RuntimeState.feedback (the second, direct-ledger transaction
+        # path) was removed; the ONLY production feedback mutation entry is
+        # RuntimeService -> OperationLog. Eviction therefore flows through the
+        # WAL and 'closed' never lives in the state mirror.
         with tempfile.TemporaryDirectory() as td:
             st = RuntimeState(Path(td) / 's.json', max_completed=2, max_ledger_entries=8)
+            self.assertFalse(hasattr(st, 'feedback'),
+                             'RuntimeState must not expose a direct feedback mutation')
+            svc = RuntimeService(Path(td) / 'state', Path(td) / 'tx',
+                                 max_completed=2, ledger_max_entries=8)
             for i in range(4):
                 did = f'q{i}'
-                st.register('route', did, 1, 1)
-                st.commit_root_result(did, {'ok': True})
-                st.feedback({'decisionId': did, 'capability': 'route', 'modelGeneration': 1, 'terminalPayload': {}})
-            s = st.load()
+                reg = {'capability': 'route', 'decisionId': did, 'modelGeneration': 1,
+                       'createdAtEpochSeconds': 1}
+                out = svc.handle(self.envelope('register', reg))
+                self.assertTrue(out['ok'], out)
+                self.assertTrue(svc.handle(self.envelope('rootResult', {'decisionId': did,
+                                                                        'result': {'ok': True}}))['ok'])
+                fb = {'decisionId': did, 'capability': 'route', 'modelGeneration': 1,
+                      'terminalPayload': {}}
+                out = svc.handle(self.envelope('feedback', fb))
+                self.assertTrue(out['ok'], out)
+            s = svc.state.load()
             self.assertEqual(len(s['completed']), 2)
             self.assertNotIn('closed', s, 'external ledger is the single source of truth')
             self.assertTrue(all(set(t) == {'payloadHash', 'closedAtEpochSeconds'}
-                                for t in st.ledger.entries().values()))
-            again = st.feedback({'decisionId': 'q0', 'capability': 'route', 'modelGeneration': 1, 'terminalPayload': {}})
-            self.assertEqual(again['status'], 'idempotent')
-            with self.assertRaises(Exception) as cm:
-                st.feedback({'decisionId': 'q0', 'capability': 'route', 'modelGeneration': 1, 'terminalPayload': {'x': 1}})
-            self.assertIn('closed', str(cm.exception))
+                                for t in svc.state.ledger.entries().values()))
+            svc2 = RuntimeService(Path(td) / 'state', Path(td) / 'tx',
+                                  max_completed=2, ledger_max_entries=8)
+            again = {'decisionId': 'q0', 'capability': 'route', 'modelGeneration': 1,
+                     'terminalPayload': {}}
+            out = svc2.handle(self.envelope('feedback', again))
+            self.assertTrue(out['ok'], out)
+            self.assertEqual(out['result']['result']['status'], 'idempotent')
+            conflict = {'decisionId': 'q0', 'capability': 'route', 'modelGeneration': 1,
+                        'terminalPayload': {'x': 1}}
+            out = svc2.handle(self.envelope('feedback', conflict))
+            self.assertFalse(out['ok'], 'conflicting replay must fail closed')
+            self.assertIn('closed', out['error']['message'].lower())
 
     def test_ledger_externalized_on_disk(self):
         from rill_xray_agent.state import ClosedLedger
