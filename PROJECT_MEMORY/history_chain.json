@@ -79,6 +79,11 @@
       "path": "history/2026-08-09-r4-qualification.md",
       "previousSha256": "6d15b1e887113efc5c55b3057232b91fdd7fcfdda5235a55d9675bb9cf425b0e",
       "sha256": "f6ee821abe3d35ad97cf163154e006c99ad5bc56e408db200e610bd7f1a72a8c"
+    },
+    {
+      "path": "history/2026-08-09-r4-final-heads.md",
+      "previousSha256": "f6ee821abe3d35ad97cf163154e006c99ad5bc56e408db200e610bd7f1a72a8c",
+      "sha256": "7f29c0d40dfcfac739d9f76f5a75772618161ce7737581d77543189a67a883e3"
     }
   ],
   "schemaVersion": 1
