@@ -37,7 +37,7 @@ python3 scripts/verify_project_memory.py
 python3 scripts/run_all_checks.py
 ```
 
-CLI 使用示例（默认 socket 为 `/run/rill-xray-agent/agent.sock`）：
+CLI 使用示例（默认 socket 为 `/run/rill-xray-agent/runtime.sock`）：
 
 ```bash
 rill-xray-agent --json status
