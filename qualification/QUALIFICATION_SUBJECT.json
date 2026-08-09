@@ -1,7 +1,7 @@
 {
     "executedAt": {
-        "rillCommit": "f8bc334bd508ce7ebf06f1b542cf1daccf4e61d0",
-        "xrayCommit": "7dd4f866c4b36cd9f42c9406800ff401941210e7"
+        "rillCommit": "638855e73e6403d37273204ea246d00fc4f9177c",
+        "xrayCommit": "dac0c509dcfa8f6eb24b63de1e45f8855dd47b80"
     },
     "qualification": {
         "harnessSha256": "9df42aab447431fd8d3b5fca148e8f46eaf201380f6e2d4f0768deabce19372c"
@@ -12,10 +12,13 @@
         "productionTreeSha256": "fd25bf7f7ed7e8d08a2bbdd3b5fd6fee123121a1808f067ea2f0656697de421b"
     },
     "schemaVersion": 1,
-    "subjectId": "a532690a57a8b6524de8c31e3fe2681c09fe3f4d874028a4951062c86d0e7027",
+    "subjectId": "d96ef7f950f4905004ca096210a505e88d6174119c19a7d56f24dab0c98697d2",
     "xray": {
+        "bootstrapSha256": "09c1cf441f57c476051b88e87a921b77aaef9fed113aa8b09caaf69bf1eb0dd4",
+        "bundleAssetSha256": "bff2455c355088234deff77e371eb0d791098f490797706a08734d3d4776eba0",
+        "deliveryTreeSha256": "9c3cc391061e7633f69a933a8bc7e88b6b6f96b6fe45ec8da31fdbf39ce85b34",
         "installShSha256": "180eca3fc4b16f484109918ec3a410d64c8d791ae284b5df615bbaa5b2d47899",
-        "payloadTreeSha256": "ba3bfd60b129ed0e044ca4ce5df0acb13d82d35e2643c5944dc748bbd6e53a48",
+        "payloadTreeSha256": "fead3604c241ed23acf4124fe19a98578d35859edfea263726f3cbc95fca34b6",
         "systemdTreeSha256": "70ec8a44cda35f487d0ee2fa72986af68d0bbe5804c47d5f836170802c2c4b21"
     }
 }
