@@ -89,6 +89,11 @@
       "path": "history/2026-08-09-r5-frozen-subject-qualification.md",
       "previousSha256": "7f29c0d40dfcfac739d9f76f5a75772618161ce7737581d77543189a67a883e3",
       "sha256": "4e462033e4bb6d3b95aaf06e884e25bcaa7c47986767a52c016c90be4cfbdf9f"
+    },
+    {
+      "path": "history/2026-08-09-r6-bootstrap-delivery-qualification.md",
+      "previousSha256": "4e462033e4bb6d3b95aaf06e884e25bcaa7c47986767a52c016c90be4cfbdf9f",
+      "sha256": "cff01339c34c4c0f830cfa1e2b39220ef37d7e25c1f05e62bce325edb5a0c997"
     }
   ],
   "schemaVersion": 1
