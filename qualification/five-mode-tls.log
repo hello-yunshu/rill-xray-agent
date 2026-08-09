@@ -1,4 +1,6 @@
+=== five-mode suite: mode=tls container=a266ce23c41c ===
 --- install (tls) ---
+  Testing installation mode: tls
 ============================================
   Testing installation mode: tls
 ============================================
@@ -12,13 +14,9 @@
 
 WARNING: apt does not have a stable CLI interface. Use with caution in scripts.
 
-Get:1 http://deb.debian.org/debian bookworm InRelease [151 kB]
-Get:2 http://deb.debian.org/debian bookworm-updates InRelease [55.4 kB]
-Get:3 http://deb.debian.org/debian-security bookworm-security InRelease [34.8 kB]
-Get:4 http://deb.debian.org/debian bookworm/main arm64 Packages [8689 kB]
-Get:5 http://deb.debian.org/debian bookworm-updates/main arm64 Packages [6936 B]
-Get:6 http://deb.debian.org/debian-security bookworm-security/main arm64 Packages [323 kB]
-Fetched 9261 kB in 2s (3769 kB/s)
+Hit:1 http://deb.debian.org/debian bookworm InRelease
+Hit:2 http://deb.debian.org/debian bookworm-updates InRelease
+Hit:3 http://deb.debian.org/debian-security bookworm-security InRelease
 Reading package lists...
 Building dependency tree...
 Reading state information...
@@ -36,30 +34,9 @@ Need to get 107 kB of archives.
 After this operation, 242 kB of additional disk space will be used.
 Get:1 http://deb.debian.org/debian bookworm/main arm64 bc arm64 1.07.1-3 [107 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 107 kB in 0s (390 kB/s)
+Fetched 107 kB in 1s (211 kB/s)
 Selecting previously unselected package bc.
-(Reading database ... 
-(Reading database ... 5%
-(Reading database ... 10%
-(Reading database ... 15%
-(Reading database ... 20%
-(Reading database ... 25%
-(Reading database ... 30%
-(Reading database ... 35%
-(Reading database ... 40%
-(Reading database ... 45%
-(Reading database ... 50%
-(Reading database ... 55%
-(Reading database ... 60%
-(Reading database ... 65%
-(Reading database ... 70%
-(Reading database ... 75%
-(Reading database ... 80%
-(Reading database ... 85%
-(Reading database ... 90%
-(Reading database ... 95%
-(Reading database ... 100%
-(Reading database ... 8953 files and directories currently installed.)
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 9138 files and directories currently installed.)
 Preparing to unpack .../archives/bc_1.07.1-3_arm64.deb ...
 Unpacking bc (1.07.1-3) ...
 Setting up bc (1.07.1-3) ...
@@ -87,30 +64,9 @@ Get:4 http://deb.debian.org/debian bookworm/main arm64 dbus-daemon arm64 1.14.10
 Get:5 http://deb.debian.org/debian bookworm/main arm64 dbus-system-bus-common all 1.14.10-1~deb12u1 [79.3 kB]
 Get:6 http://deb.debian.org/debian bookworm/main arm64 dbus arm64 1.14.10-1~deb12u1 [96.2 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 726 kB in 0s (1581 kB/s)
+Fetched 726 kB in 10s (70.4 kB/s)
 Selecting previously unselected package libdbus-1-3:arm64.
-(Reading database ... 
-(Reading database ... 5%
-(Reading database ... 10%
-(Reading database ... 15%
-(Reading database ... 20%
-(Reading database ... 25%
-(Reading database ... 30%
-(Reading database ... 35%
-(Reading database ... 40%
-(Reading database ... 45%
-(Reading database ... 50%
-(Reading database ... 55%
-(Reading database ... 60%
-(Reading database ... 65%
-(Reading database ... 70%
-(Reading database ... 75%
-(Reading database ... 80%
-(Reading database ... 85%
-(Reading database ... 90%
-(Reading database ... 95%
-(Reading database ... 100%
-(Reading database ... 8971 files and directories currently installed.)
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 9156 files and directories currently installed.)
 Preparing to unpack .../0-libdbus-1-3_1.14.10-1~deb12u1_arm64.deb ...
 Unpacking libdbus-1-3:arm64 (1.14.10-1~deb12u1) ...
 Selecting previously unselected package dbus-bin.
@@ -165,6 +121,7 @@ Get:1 http://deb.debian.org/debian bookworm/main arm64 perl-modules-5.36 all 5.3
 Get:2 http://deb.debian.org/debian bookworm/main arm64 libgdbm6 arm64 1.23-3 [70.9 kB]
 Get:3 http://deb.debian.org/debian bookworm/main arm64 libgdbm-compat4 arm64 1.23-3 [48.0 kB]
 Get:4 http://deb.debian.org/debian bookworm/main arm64 libperl5.36 arm64 5.36.0-7+deb12u3 [4009 kB]
+Ign:4 http://deb.debian.org/debian bookworm/main arm64 libperl5.36 arm64 5.36.0-7+deb12u3
 Get:5 http://deb.debian.org/debian bookworm/main arm64 perl arm64 5.36.0-7+deb12u3 [239 kB]
 Get:6 http://deb.debian.org/debian bookworm/main arm64 less arm64 590-2.1~deb12u2 [128 kB]
 Get:7 http://deb.debian.org/debian bookworm/main arm64 netbase all 6.4 [12.8 kB]
@@ -176,6 +133,7 @@ Get:12 http://deb.debian.org/debian bookworm/main arm64 libcurl3-gnutls arm64 7.
 Get:13 http://deb.debian.org/debian bookworm/main arm64 liberror-perl all 0.17029-2 [29.0 kB]
 Get:14 http://deb.debian.org/debian bookworm/main arm64 git-man all 1:2.39.5-0+deb12u3 [2053 kB]
 Get:15 http://deb.debian.org/debian bookworm/main arm64 git arm64 1:2.39.5-0+deb12u3 [7153 kB]
+Ign:15 http://deb.debian.org/debian bookworm/main arm64 git arm64 1:2.39.5-0+deb12u3
 Get:16 http://deb.debian.org/debian bookworm/main arm64 libxau6 arm64 1:1.0.9-1 [19.7 kB]
 Get:17 http://deb.debian.org/debian bookworm/main arm64 libxdmcp6 arm64 1:1.1.2-3 [25.4 kB]
 Get:18 http://deb.debian.org/debian bookworm/main arm64 libxcb1 arm64 1.15-1 [143 kB]
@@ -185,31 +143,14 @@ Get:21 http://deb.debian.org/debian bookworm/main arm64 libxext6 arm64 2:1.3.4-1
 Get:22 http://deb.debian.org/debian bookworm/main arm64 libxmuu1 arm64 2:1.1.3-3 [24.0 kB]
 Get:23 http://deb.debian.org/debian bookworm/main arm64 patch arm64 2.7.6-7 [121 kB]
 Get:24 http://deb.debian.org/debian bookworm/main arm64 xauth arm64 1:1.1.2-1 [35.5 kB]
+Get:4 http://deb.debian.org/debian bookworm/main arm64 libperl5.36 arm64 5.36.0-7+deb12u3 [4009 kB]
+Get:15 http://deb.debian.org/debian bookworm/main arm64 git arm64 1:2.39.5-0+deb12u3 [7153 kB]
+Ign:15 http://deb.debian.org/debian bookworm/main arm64 git arm64 1:2.39.5-0+deb12u3
+Get:15 http://deb.debian.org/debian bookworm/main arm64 git arm64 1:2.39.5-0+deb12u3 [7153 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 19.5 MB in 1s (20.0 MB/s)
+Fetched 12.5 MB in 8min 39s (24.1 kB/s)
 Selecting previously unselected package perl-modules-5.36.
-(Reading database ... 
-(Reading database ... 5%
-(Reading database ... 10%
-(Reading database ... 15%
-(Reading database ... 20%
-(Reading database ... 25%
-(Reading database ... 30%
-(Reading database ... 35%
-(Reading database ... 40%
-(Reading database ... 45%
-(Reading database ... 50%
-(Reading database ... 55%
-(Reading database ... 60%
-(Reading database ... 65%
-(Reading database ... 70%
-(Reading database ... 75%
-(Reading database ... 80%
-(Reading database ... 85%
-(Reading database ... 90%
-(Reading database ... 95%
-(Reading database ... 100%
-(Reading database ... 9045 files and directories currently installed.)
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 9230 files and directories currently installed.)
 Preparing to unpack .../00-perl-modules-5.36_5.36.0-7+deb12u3_all.deb ...
 Unpacking perl-modules-5.36 (5.36.0-7+deb12u3) ...
 Selecting previously unselected package libgdbm6:arm64.
@@ -319,30 +260,9 @@ Need to get 313 kB of archives.
 After this operation, 522 kB of additional disk space will be used.
 Get:1 http://deb.debian.org/debian bookworm/main arm64 lsof arm64 4.95.0-1 [313 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 313 kB in 0s (1174 kB/s)
+Fetched 313 kB in 1s (354 kB/s)
 Selecting previously unselected package lsof.
-(Reading database ... 
-(Reading database ... 5%
-(Reading database ... 10%
-(Reading database ... 15%
-(Reading database ... 20%
-(Reading database ... 25%
-(Reading database ... 30%
-(Reading database ... 35%
-(Reading database ... 40%
-(Reading database ... 45%
-(Reading database ... 50%
-(Reading database ... 55%
-(Reading database ... 60%
-(Reading database ... 65%
-(Reading database ... 70%
-(Reading database ... 75%
-(Reading database ... 80%
-(Reading database ... 85%
-(Reading database ... 90%
-(Reading database ... 95%
-(Reading database ... 100%
-(Reading database ... 12585 files and directories currently installed.)
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 12770 files and directories currently installed.)
 Preparing to unpack .../lsof_4.95.0-1_arm64.deb ...
 Unpacking lsof (4.95.0-1) ...
 Setting up lsof (4.95.0-1) ...
@@ -363,30 +283,9 @@ Get:1 http://deb.debian.org/debian bookworm/main arm64 libpng16-16 arm64 1.6.39-
 Get:2 http://deb.debian.org/debian bookworm/main arm64 libqrencode4 arm64 4.1.1-1 [39.4 kB]
 Get:3 http://deb.debian.org/debian bookworm/main arm64 qrencode arm64 4.1.1-1 [41.9 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 352 kB in 0s (929 kB/s)
+Fetched 352 kB in 5s (72.7 kB/s)
 Selecting previously unselected package libpng16-16:arm64.
-(Reading database ... 
-(Reading database ... 5%
-(Reading database ... 10%
-(Reading database ... 15%
-(Reading database ... 20%
-(Reading database ... 25%
-(Reading database ... 30%
-(Reading database ... 35%
-(Reading database ... 40%
-(Reading database ... 45%
-(Reading database ... 50%
-(Reading database ... 55%
-(Reading database ... 60%
-(Reading database ... 65%
-(Reading database ... 70%
-(Reading database ... 75%
-(Reading database ... 80%
-(Reading database ... 85%
-(Reading database ... 90%
-(Reading database ... 95%
-(Reading database ... 100%
-(Reading database ... 12609 files and directories currently installed.)
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 12794 files and directories currently installed.)
 Preparing to unpack .../libpng16-16_1.6.39-2+deb12u5_arm64.deb ...
 Unpacking libpng16-16:arm64 (1.6.39-2+deb12u5) ...
 Selecting previously unselected package libqrencode4:arm64.
@@ -434,30 +333,9 @@ Get:11 http://deb.debian.org/debian bookworm/main arm64 exim4-daemon-light arm64
 Get:12 http://deb.debian.org/debian bookworm/main arm64 liblockfile1 arm64 1.17-1+b1 [16.8 kB]
 Get:13 http://deb.debian.org/debian bookworm/main arm64 bsd-mailx arm64 8.1.2-0.20220412cvs-1 [89.0 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 3330 kB in 1s (3985 kB/s)
+Fetched 3330 kB in 1min 10s (47.3 kB/s)
 Selecting previously unselected package cron-daemon-common.
-(Reading database ... 
-(Reading database ... 5%
-(Reading database ... 10%
-(Reading database ... 15%
-(Reading database ... 20%
-(Reading database ... 25%
-(Reading database ... 30%
-(Reading database ... 35%
-(Reading database ... 40%
-(Reading database ... 45%
-(Reading database ... 50%
-(Reading database ... 55%
-(Reading database ... 60%
-(Reading database ... 65%
-(Reading database ... 70%
-(Reading database ... 75%
-(Reading database ... 80%
-(Reading database ... 85%
-(Reading database ... 90%
-(Reading database ... 95%
-(Reading database ... 100%
-(Reading database ... 12635 files and directories currently installed.)
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 12820 files and directories currently installed.)
 Preparing to unpack .../cron-daemon-common_3.0pl1-162_all.deb ...
 Unpacking cron-daemon-common (3.0pl1-162) ...
 Selecting previously unselected package sensible-utils.
@@ -467,28 +345,7 @@ Setting up cron-daemon-common (3.0pl1-162) ...
 Adding group `crontab' (GID 103) ...
 Done.
 Selecting previously unselected package cron.
-(Reading database ... 
-(Reading database ... 5%
-(Reading database ... 10%
-(Reading database ... 15%
-(Reading database ... 20%
-(Reading database ... 25%
-(Reading database ... 30%
-(Reading database ... 35%
-(Reading database ... 40%
-(Reading database ... 45%
-(Reading database ... 50%
-(Reading database ... 55%
-(Reading database ... 60%
-(Reading database ... 65%
-(Reading database ... 70%
-(Reading database ... 75%
-(Reading database ... 80%
-(Reading database ... 85%
-(Reading database ... 90%
-(Reading database ... 95%
-(Reading database ... 100%
-(Reading database ... 12680 files and directories currently installed.)
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 12865 files and directories currently installed.)
 Preparing to unpack .../00-cron_3.0pl1-162_arm64.deb ...
 Unpacking cron (3.0pl1-162) ...
 Selecting previously unselected package liblockfile-bin.
@@ -542,13 +399,11 @@ debconf: unable to initialize frontend: Readline
 debconf: (This frontend requires a controlling tty.)
 debconf: falling back to frontend: Teletype
 exim: DB upgrade, deleting hints-db
-Created symlink /etc/systemd/system/timers.target.wants/exim4-base.timer → /lib/systemd/system/exim4-base.timer.
-
+Created symlink /etc/systemd/system/timers.target.wants/exim4-base.timer → /lib/systemd/system/exim4-base.timer.
 /usr/sbin/policy-rc.d returned 101, not running 'start exim4-base.service exim4-base.timer'
 Setting up cron (3.0pl1-162) ...
 invoke-rc.d: policy-rc.d denied execution of start.
-Created symlink /etc/systemd/system/multi-user.target.wants/cron.service → /lib/systemd/system/cron.service.
-
+Created symlink /etc/systemd/system/multi-user.target.wants/cron.service → /lib/systemd/system/cron.service.
 /usr/sbin/policy-rc.d returned 101, not running 'start cron.service'
 Setting up libunbound8:arm64 (1.17.1-2+deb12u4) ...
 Setting up libgnutls-dane0:arm64 (3.7.9-2+deb12u7) ...
@@ -578,30 +433,9 @@ Need to get 46.1 kB of archives.
 After this operation, 181 kB of additional disk space will be used.
 Get:1 http://deb.debian.org/debian bookworm/main arm64 iputils-ping arm64 3:20221126-1+deb12u1 [46.1 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 46.1 kB in 0s (279 kB/s)
+Fetched 46.1 kB in 1s (69.9 kB/s)
 Selecting previously unselected package iputils-ping.
-(Reading database ... 
-(Reading database ... 5%
-(Reading database ... 10%
-(Reading database ... 15%
-(Reading database ... 20%
-(Reading database ... 25%
-(Reading database ... 30%
-(Reading database ... 35%
-(Reading database ... 40%
-(Reading database ... 45%
-(Reading database ... 50%
-(Reading database ... 55%
-(Reading database ... 60%
-(Reading database ... 65%
-(Reading database ... 70%
-(Reading database ... 75%
-(Reading database ... 80%
-(Reading database ... 85%
-(Reading database ... 90%
-(Reading database ... 95%
-(Reading database ... 100%
-(Reading database ... 12951 files and directories currently installed.)
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 13136 files and directories currently installed.)
 Preparing to unpack .../iputils-ping_3%3a20221126-1+deb12u1_arm64.deb ...
 Unpacking iputils-ping (3:20221126-1+deb12u1) ...
 Setting up iputils-ping (3:20221126-1+deb12u1) ...
@@ -618,30 +452,9 @@ Need to get 313 kB of archives.
 After this operation, 725 kB of additional disk space will be used.
 Get:1 http://deb.debian.org/debian bookworm/main arm64 libpcre3 arm64 2:8.39-15 [313 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 313 kB in 0s (1114 kB/s)
+Fetched 313 kB in 3s (116 kB/s)
 Selecting previously unselected package libpcre3:arm64.
-(Reading database ... 
-(Reading database ... 5%
-(Reading database ... 10%
-(Reading database ... 15%
-(Reading database ... 20%
-(Reading database ... 25%
-(Reading database ... 30%
-(Reading database ... 35%
-(Reading database ... 40%
-(Reading database ... 45%
-(Reading database ... 50%
-(Reading database ... 55%
-(Reading database ... 60%
-(Reading database ... 65%
-(Reading database ... 70%
-(Reading database ... 75%
-(Reading database ... 80%
-(Reading database ... 85%
-(Reading database ... 90%
-(Reading database ... 95%
-(Reading database ... 100%
-(Reading database ... 12962 files and directories currently installed.)
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 13147 files and directories currently installed.)
 Preparing to unpack .../libpcre3_2%3a8.39-15_arm64.deb ...
 Unpacking libpcre3:arm64 (2:8.39-15) ...
 Setting up libpcre3:arm64 (2:8.39-15) ...
@@ -712,30 +525,9 @@ Get:36 http://deb.debian.org/debian bookworm/main arm64 libpcrecpp0v5 arm64 2:8.
 Get:37 http://deb.debian.org/debian bookworm/main arm64 libpcre3-dev arm64 2:8.39-15 [584 kB]
 Get:38 http://deb.debian.org/debian bookworm/main arm64 manpages-dev all 6.03-2 [2030 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 17.3 MB in 1s (11.9 MB/s)
+Fetched 17.3 MB in 6min 40s (43.3 kB/s)
 Selecting previously unselected package manpages.
-(Reading database ... 
-(Reading database ... 5%
-(Reading database ... 10%
-(Reading database ... 15%
-(Reading database ... 20%
-(Reading database ... 25%
-(Reading database ... 30%
-(Reading database ... 35%
-(Reading database ... 40%
-(Reading database ... 45%
-(Reading database ... 50%
-(Reading database ... 55%
-(Reading database ... 60%
-(Reading database ... 65%
-(Reading database ... 70%
-(Reading database ... 75%
-(Reading database ... 80%
-(Reading database ... 85%
-(Reading database ... 90%
-(Reading database ... 95%
-(Reading database ... 100%
-(Reading database ... 12975 files and directories currently installed.)
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 13160 files and directories currently installed.)
 Preparing to unpack .../00-manpages_6.03-2_all.deb ...
 Unpacking manpages (6.03-2) ...
 Selecting previously unselected package fonts-dejavu-core.
@@ -906,31 +698,12 @@ The following NEW packages will be installed:
 Need to get 913 kB of archives.
 After this operation, 1338 kB of additional disk space will be used.
 Get:1 http://deb.debian.org/debian bookworm/main arm64 zlib1g-dev arm64 1:1.2.13.dfsg-1 [913 kB]
+Ign:1 http://deb.debian.org/debian bookworm/main arm64 zlib1g-dev arm64 1:1.2.13.dfsg-1
+Get:1 http://deb.debian.org/debian bookworm/main arm64 zlib1g-dev arm64 1:1.2.13.dfsg-1 [913 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 913 kB in 0s (2147 kB/s)
+Fetched 658 kB in 20s (33.3 kB/s)
 Selecting previously unselected package zlib1g-dev:arm64.
-(Reading database ... 
-(Reading database ... 5%
-(Reading database ... 10%
-(Reading database ... 15%
-(Reading database ... 20%
-(Reading database ... 25%
-(Reading database ... 30%
-(Reading database ... 35%
-(Reading database ... 40%
-(Reading database ... 45%
-(Reading database ... 50%
-(Reading database ... 55%
-(Reading database ... 60%
-(Reading database ... 65%
-(Reading database ... 70%
-(Reading database ... 75%
-(Reading database ... 80%
-(Reading database ... 85%
-(Reading database ... 90%
-(Reading database ... 95%
-(Reading database ... 100%
-(Reading database ... 17710 files and directories currently installed.)
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 17895 files and directories currently installed.)
 Preparing to unpack .../zlib1g-dev_1%3a1.2.13.dfsg-1_arm64.deb ...
 Unpacking zlib1g-dev:arm64 (1:1.2.13.dfsg-1) ...
 Setting up zlib1g-dev:arm64 (1:1.2.13.dfsg-1) ...
@@ -941,33 +714,22 @@ Setting up zlib1g-dev:arm64 (1:1.2.13.dfsg-1) ...
 [32m[OK][0m [42;30m 14431 端口未被占用 [0m
 [32m[OK][0m [42;30m 14432 端口未被占用 [0m
 [32m[OK][0m [42;30m 停止 [0m
-./install.sh: line 3200: xray: command not found
+./install.sh: line 3240: xray: command not found
 [32m[OK][0m [42;30m 即将安装 Xray v26.3.27 [0m
 tput: No value for $TERM and no -T specified
 tput: No value for $TERM and no -T specified
 tput: No value for $TERM and no -T specified
 tput: No value for $TERM and no -T specified
 info: Installing specified Xray version v26.3.27 for aarch64
-info: unzip is installed.
 Downloading Xray archive: https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-arm64-v8a.zip
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
-
-  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
-  0     0    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0
-  0     0    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0
-  0     0    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0
-
-  0     0    0     0    0     0      0      0 --:--:--  0:00:03 --:--:--     0
-  0     0    0     0    0     0      0      0 --:--:--  0:00:03 --:--:--     0
-  2 18.8M    2  512k    0     0   112k      0  0:02:51  0:00:04  0:02:47  328k
- 45 18.8M   45 8807k    0     0  1582k      0  0:00:12  0:00:05  0:00:07 3433k
- 80 18.8M   80 15.1M    0     0  2291k      0  0:00:08  0:00:06  0:00:02 4106k
-100 18.8M  100 18.8M    0     0  2671k      0  0:00:07  0:00:07 --:--:-- 4576k
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:02 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:03 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:03 --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:--  0:00:04 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:05 --:--:--     0  0 18.8M    0 98295    0     0  15802      0  0:20:47  0:00:06  0:20:41 78762  3 18.8M    3  639k    0     0  91570      0  0:03:35  0:00:07  0:03:28  292k 14 18.8M   14 2768k    0     0   336k      0  0:00:57  0:00:08  0:00:49  849k 22 18.8M   22 4412k    0     0   484k      0  0:00:39  0:00:09  0:00:30 1064k 38 18.8M   38 7500k    0     0   734k      0  0:00:26  0:00:10  0:00:16 1465k 55 18.8M   55 10.4M    0     0   951k      0  0:00:20  0:00:11  0:00:09 2113k 77 18.8M   77 14.5M    0     0  1234k      0  0:00:15  0:00:12  0:00:03 2895k 95 18.8M   95 17.9M    0     0  1400k      0  0:00:13  0:00:13 --:--:-- 3191k100 18.8M  100 18.8M    0     0  1436k      0  0:00:13  0:00:13 --:--:-- 3462k
 ok.
 Downloading verification file for Xray archive: https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-arm64-v8a.zip.dgst
 ok.
-info: Extract the Xray package to /tmp/tmp.elAkElXZtj and prepare it for installation.
+info: Extract the Xray package to /tmp/tmp.RZUPYCsUXW and prepare it for installation.
 rm: cannot remove '/etc/systemd/system/xray.service.d/10-donot_touch_multi_conf.conf': No such file or directory
 rm: cannot remove '/etc/systemd/system/xray@.service.d/10-donot_touch_multi_conf.conf': No such file or directory
 info: Systemd service files have been installed successfully!
@@ -1011,7 +773,7 @@ installed: /var/log/xray/access.log
 installed: /var/log/xray/error.log
 installed: /etc/systemd/system/xray.service
 installed: /etc/systemd/system/xray@.service
-removed: /tmp/tmp.elAkElXZtj
+removed: /tmp/tmp.RZUPYCsUXW
 info: Xray v26.3.27 is installed.
 You may need to execute a command to remove dependent software: apt purge curl unzip
 Created symlink /etc/systemd/system/multi-user.target.wants/xray.service → /etc/systemd/system/xray.service.
@@ -1020,28 +782,7 @@ info: Enable and start the Xray service
 [32m[OK][0m [42;30m 检测到 Xray 的权限控制, 启动修改程序 [0m
 [32m[OK][0m [42;30m Xray 修改 完成 [0m
 [32m[OK][0m [42;30m 即将下载已编译的 Nginx v2026.07.15.6961 (arm) [0m
-#=#=#                                                                         
-##O#-#                                                                        
-##O=#  #                                                                      
-#=#=-#  #                                                                     
--#O#- #   #                                                                   
--=#=#   #   #                                                                 
--=O#-#   #   #                                                                
--=O=#  #   #   #                                                              
-
-                                                                           0.1%
-                                                                           0.5%
-                                                                           1.0%
-#                                                                          2.1%
-##                                                                         3.2%
-###                                                                        5.2%
-#####                                                                      8.0%
-#########                                                                 12.8%
-##############                                                            19.6%
-#####################                                                     30.2%
-##################################                                        47.3%
-################################################                          67.1%
-######################################################################## 100.0%
+#=#=#                                                                         ##O#-#                                                                        ##O=#  #                                                                      #=#=-#  #                                                                     -#O#- #   #                                                                   -=#=#   #   #                                                                 -=O#-#   #   #                                                                -=O=#  #   #   #                                                              -=O=-#  #    #   #                                                                                                                                       0.3%                                                                           0.6%                                                                           0.8%#                                                                          1.8%##                                                                         2.8%##                                                                         3.2%###                                                                        5.4%#####                                                                      8.0%######                                                                     8.6%########                                                                  11.4%###########                                                               15.8%#############                                                             18.4%#########################                                                 36.0%###############################                                           43.4%#######################################                                   54.6%##########################################                                59.7%###########################################                               60.2%################################################################          90.1%##################################################################        92.7%###################################################################       94.4%#####################################################################     96.6%######################################################################## 100.0%
 [32m[OK][0m [42;30m Nginx 下载 完成 [0m
 [32m[OK][0m [42;30m Nginx SHA256 校验 通过 [0m
 [32m[OK][0m [42;30m Nginx 压缩包安全检查通过 [0m
@@ -1078,8 +819,8 @@ Rill Xray Agent: host health check failed; staying observe-only
 --- Xray config validation ---
 Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/arm64)
 A unified platform for anti-censorship.
-2026/08/08 19:20:53.905673 [Info] infra/conf/serial: Reading config: &{Name:[redacted-project]/conf/xray/config.json Format:json}
-2026/08/08 19:20:53.905695 [Warning] common/errors: The feature WebSocket transport (with ALPN http/1.1, etc.) is deprecated, not recommended for using and might be removed. Please migrate to XHTTP H2 & H3 as soon as possible.
+2026/08/09 09:16:42.398856 [Info] infra/conf/serial: Reading config: &{Name:/etc/idleleo/conf/xray/config.json Format:json}
+2026/08/09 09:16:42.398921 [Warning] common/errors: The feature WebSocket transport (with ALPN http/1.1, etc.) is deprecated, not recommended for using and might be removed. Please migrate to XHTTP H2 & H3 as soon as possible.
 Configuration OK.
   ✅ PASS: Xray config is valid
 
@@ -1096,7 +837,7 @@ Configuration OK.
   ✅ PASS: Nginx config exists
   ✅ PASS: Nginx systemd service exists
   ✅ PASS: Nginx service is active
-nginx: [warn] "ssl_stapling" ignored, issuer certificate not found for certificate "[redacted-project]/cert/xray.crt"
+nginx: [warn] "ssl_stapling" ignored, issuer certificate not found for certificate "/etc/idleleo/cert/xray.crt"
 nginx: the configuration file /usr/local/nginx/conf/nginx.conf syntax is ok
 nginx: configuration file /usr/local/nginx/conf/nginx.conf test is successful
   ✅ PASS: Nginx config is valid
@@ -1129,12 +870,50 @@ true
 
 🎉 All tests passed for mode: tls
 --- install DONE rc=0 ---
+[PASS] Xray install + post-install tests passed
 --- install Rill agent from frozen bundle ---
+[PASS] agent installer present
 Created symlink /etc/systemd/system/multi-user.target.wants/rill-xray-agent-runtime.service → /etc/systemd/system/rill-xray-agent-runtime.service.
 Rill Xray Agent installed; mode=observe-only; Route Assist remains OFF
+[PASS] agent install rc=0
 --- agent startup ---
+[PASS] runtime unit active
+[PASS] agent unit active
+[PASS] observe path active
 --- mode lifecycle ---
+[PASS] initial mode observe-only
+[PASS] routeAssist=false by default
+[PASS] boundedAuto=false by default
+[PASS] runtime.sock connectable
+[PASS] apply safe-disabled
+[PASS] cfg mode safe-disabled
+[PASS] agent unit off while safe-disabled
+[PASS] runtime sni routeAssist=false
+[PASS] apply observe-only again
+[PASS] cfg mode observe-only(2)
+[PASS] agent unit back on
+[PASS] apply normal
+[PASS] cfg mode normal
+[PASS] agent unit on in normal
+[PASS] runtime sni normal
 --- agent formal verify ok ---
+[PASS] live contract verify
+[PASS] verify.sh exits 0
+--- Xray side unaffected proof: config hash before uninstall ---
 --- agent uninstall (two-phase) ---
-Rill Xray Agent removed; Xray configuration was not modified
-RILL_AGENT_LIFECYCLE_OK
+[PASS] prepare writes intent
+[PASS] intent phase prepared
+[PASS] no agent removal before commit
+Rill Agent: host uninstall failed; agent diagnostics retained
+[PASS] abort returns nonzero (host rc preserved)
+[PASS] commit returns zero (purge ran)
+[PASS] committed intent durable before purge (watcher)
+[PASS] runtime dir purged
+[PASS] runtime units removed
+[PASS] masked opt payload removed
+--- Xray config untouched after agent uninstall ---
+[PASS] Xray config not modified by agent lifecycle
+[PASS] Xray service still active after uninstall
+=== totals (mode=tls) ===
+five-mode suite tls: 34 PASS, 0 FAIL
+RILL_AGENT_LIFECYCLE_OK tls
