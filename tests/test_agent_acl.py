@@ -34,6 +34,17 @@ class Tests(unittest.TestCase):
         svc = RuntimeService(r / 'state', r / 'tx', allowed_uids=[0, uid])
         t = threading.Thread(target=svc.serve, args=(r / 'r.sock',), daemon=True)
         t.start()
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            try:
+                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+                    s.settimeout(.5)
+                    s.connect(str(r / 'r.sock'))
+                break
+            except OSError:
+                time.sleep(.02)
+        else:
+            raise AssertionError('runtime listener never became ready')
         return svc, t
 
     def test_agent_default_is_fail_closed(self):
