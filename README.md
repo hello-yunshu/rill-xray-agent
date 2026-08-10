@@ -1,4 +1,4 @@
-# Rill Xray Agent
+# Rill Xray Agent 0.1.0
 
 > 本地优先、fail-closed（默认关闭）的 Xray 管理脚本观测与决策支持代理。
 > 包含可移植运行时（Runtime）、受限代理（Agent）、审计链、状态与事务恢复、备份安全、systemd 单元、Xray 宿主集成、测试与发布门禁。
@@ -55,7 +55,13 @@ rill-xray-agent mode observe-only
 
 ## 状态
 
-当前处于 **Alpha 审计修复阶段**（基线 `v0.1.0-rc.1`），发布资格已被联合审计撤销：`preReleaseAllowed=false`、`sourceProcessQualified=false`、`stableAllowed=false`。`v0.1.0-rc.2` 标签与 Pre-release 只有在全部 P0 关闭、合并后 CI 全绿且真实 PID1/systemd 门禁通过后才允许创建。真实主机 systemd、Xray/Nginx/Fail2ban 验证仍为待办项。
+**Rill Xray Agent 0.1.0**（stable）。
+
+- Portable Python Runtime 为受支持运行时；Native Rust 为实验性、不受支持（`nativeRuntimeSupported=false`）。
+- 默认 `observe-only`；Route Assist OFF；bounded auto OFF；本地运行（local-only）。
+- Docker 环境资格已完成（fresh 20/20、Debian 12 / Ubuntu 24.04 systemd PID1、five-mode、deterministic A/B、bootstrap delivery）。
+- 真实 bare-metal / VM 资格：**NOT RUN**（按 owner 发布政策推迟，未声称 PASS）。
+- 已知治理遗留：历史 public prompt orphan 对象保持 DEFERRED / STILL OPEN，不阻断 0.1.0。
 
 ## 许可证
 
