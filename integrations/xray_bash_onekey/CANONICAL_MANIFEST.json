@@ -1,7 +1,7 @@
 {
-  "bundleSha256": "44051634756430d264a80d7395f847aaddd7cd0777e92ec18dc2cc551e2301bd",
+  "bundleSha256": "2578a1b29beafaf4dcc63d6451e89b0c7aa2b23e27376e3cd5e08ebffdae8a69",
   "files": {
-    "repository_files/assets/rill-xray-agent-xray-bundle.tar.gz": "44051634756430d264a80d7395f847aaddd7cd0777e92ec18dc2cc551e2301bd",
+    "repository_files/assets/rill-xray-agent-xray-bundle.tar.gz": "2578a1b29beafaf4dcc63d6451e89b0c7aa2b23e27376e3cd5e08ebffdae8a69",
     "repository_files/rill_payload/bin/rill-xray-agent": "2fa2d791bc2dd9999f83ab99dd9f137b209b883cb4615ee12a6b4269e43d3f08",
     "repository_files/rill_payload/bin/rill-xray-agent-agent": "0fcc5a5ee59d567c167d0664b51141537d33e4f331d7b1ad65364726b104ffd9",
     "repository_files/rill_payload/bin/rill-xray-agent-runtime": "1d2c1ebcdab69f3e656a3d492e3db186c98bd372e0309cf98521ac9697b39106",
@@ -28,9 +28,9 @@
     "repository_files/rill_payload/python/rill_xray_agent/xray_adapter.py": "03c1d5f51ce91e5523c6cbccb8a6d4b2f47aeb6657b458cc96720efcca5f87f3",
     "repository_files/rill_payload/systemd/rill-xray-agent-agent.service": "b3ffc8b58a901d685b909d9c2449a00d656c3e4a72c8d3ab436af9115db002d1",
     "repository_files/rill_payload/systemd/rill-xray-agent-runtime.service": "dee49f040c816a03686ed7c624f8ccd082b47e58ae7825bdf7606ca2a6d28f07",
-    "repository_files/scripts/rill_xray_agent_bootstrap.sh": "5be9978f20032f4282f7b623aac0592c34d81cfc2a0c8dbe05144271b9cfebc3",
+    "repository_files/scripts/rill_xray_agent_bootstrap.sh": "64b6b6316e21edd07f61efbe9c7926c5819020ef66c435a3a3370e9d302c1353",
     "repository_files/scripts/rill_xray_agent_install.sh": "1a3af3beebeb1c48410d87a2ccd65b90b35efe25c407cffff821dee4aa9eab2f",
-    "repository_files/scripts/rill_xray_agent_manager.sh": "4f8dce592d0095d3916ac18eb0a7eceddc40563c5e9c82586748bf98a2d43b86",
+    "repository_files/scripts/rill_xray_agent_manager.sh": "3934504086766130bee1b2bac2b3297e42e356017922a20edb890825eed8b5d5",
     "repository_files/scripts/rill_xray_agent_observe.py": "4db1108ed0e6146e2bee1f630f4d68d6884fe9cb603979ddad3a3301cacafee6",
     "repository_files/scripts/rill_xray_agent_uninstall.sh": "190067a8f889cb38ccb5564d1f4acd07647d040cab26d645e461eb78169d13e6",
     "repository_files/scripts/rill_xray_agent_verify.sh": "256b6e9171cf5eca52a4ba662b8e4dd41267634bae3452040a64d62b4e29c144",
