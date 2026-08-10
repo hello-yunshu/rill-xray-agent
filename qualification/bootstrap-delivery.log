@@ -1,0 +1,123 @@
+== container base image ==
+image=sha256:8c00a1a42a575b8b75afb231400fb5bd9654a60cd79e6a7abef3a592eaf5a234 tag=rill-pid1-debian12:r5
+arm64
+
+== source of truth (host side) ==
+xray repo       : /Users/yunshu/Documents/GitHub/Xray_bash_onekey
+xray branch     : feat/rill-xray-agent
+xray HEAD       : 291d1ebba205082e8bb58717b0167e636a3e82f3
+bootstrap (host): bf597f35bea49d5200964cc531d3ad6e900a539bb6d68b71dca4b0763178fd16
+asset    (host): 7a6076b3d458131c882a1547feca4f13c4c383113f858ed9e25ad3d77e2fc79e
+expected (bootstrap): 7a6076b3d458131c882a1547feca4f13c4c383113f858ed9e25ad3d77e2fc79e
+
+== fresh container: real bootstrap -> current bundle asset (staged install) ==
+--- container ---
+PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
+NAME="Debian GNU/Linux"
+uid=0(root) gid=0(root) groups=0(root)
+aarch64
+
+--- bootstrap script under test (from Xray current checkout) ---
+#!/usr/bin/env bash
+set -euo pipefail
+EXPECTED_SHA256=7a6076b3d458131c882a1547feca4f13c4c383113f858ed9e25ad3d77e2fc79e
+RAW_BASE=${RILL_XRAY_AGENT_RAW_BASE:-https://raw.githubusercontent.com/hello-yunshu/rill-xray-agent/main/integrations/xray_bash_onekey}
+TMP=$(mktemp -d /tmp/rill-xray-agent.XXXXXX)
+trap 'rm -rf "$TMP"' EXIT
+BUNDLE=${RILL_XRAY_AGENT_BUNDLE_FILE:-$TMP/bundle.tar.gz}
+if [[ ! -f "$BUNDLE" ]]; then
+    curl -fsSL --connect-timeout 10 --max-time 120 --retry 2 \
+      "$RAW_BASE/assets/rill-xray-agent-xray-bundle.tar.gz" -o "$BUNDLE"
+fi
+actual=$(sha256sum "$BUNDLE" | awk '{print $1}')
+[[ "$actual" == "$EXPECTED_SHA256" ]] || { echo 'bundle SHA-256 mismatch' >&2; exit 65; }
+mkdir "$TMP/tree"
+tar -xzf "$BUNDLE" -C "$TMP/tree" --no-same-owner --no-same-permissions
+for path in "$TMP/tree"/*; do
+    case "$(basename "$path")" in scripts|systemd|rill_payload) ;; *) exit 65 ;; esac
+done
+bash "$TMP/tree/scripts/rill_xray_agent_install.sh"
+
+--- asset under test (Xray current checkout) ---
+7a6076b3d458131c882a1547feca4f13c4c383113f858ed9e25ad3d77e2fc79e  /xray/assets/rill-xray-agent-xray-bundle.tar.gz
+expected: 7a6076b3d458131c882a1547feca4f13c4c383113f858ed9e25ad3d77e2fc79e
+
+--- running: RILL_XRAY_AGENT_BUNDLE_FILE=... DESTDIR=/stage bash /xray/scripts/rill_xray_agent_bootstrap.sh ---
+staged Rill Xray Agent installed under /stage
+bootstrap+installer exit=0
+
+--- bundle members (independent audit listing) ---
+rill_payload/bin/rill-xray-agent
+rill_payload/bin/rill-xray-agent-agent
+rill_payload/bin/rill-xray-agent-runtime
+rill_payload/config/default.json
+rill_payload/python/rill_xray_agent/__init__.py
+rill_payload/python/rill_xray_agent/agent_service.py
+rill_payload/python/rill_xray_agent/audit.py
+rill_payload/python/rill_xray_agent/backup.py
+rill_payload/python/rill_xray_agent/canonical.py
+rill_payload/python/rill_xray_agent/cli.py
+rill_payload/python/rill_xray_agent/errors.py
+rill_payload/python/rill_xray_agent/health.py
+rill_payload/python/rill_xray_agent/locking.py
+rill_payload/python/rill_xray_agent/operation.py
+rill_payload/python/rill_xray_agent/payload_policy.py
+rill_payload/python/rill_xray_agent/peer_auth.py
+rill_payload/python/rill_xray_agent/root_txn.py
+rill_payload/python/rill_xray_agent/runtime_service.py
+rill_payload/python/rill_xray_agent/safe_fs.py
+rill_payload/python/rill_xray_agent/state.py
+rill_payload/python/rill_xray_agent/xray_adapter.py
+rill_payload/systemd/rill-xray-agent-agent.service
+rill_payload/systemd/rill-xray-agent-runtime.service
+scripts/rill_xray_agent_install.sh
+scripts/rill_xray_agent_manager.sh
+scripts/rill_xray_agent_observe.py
+scripts/rill_xray_agent_uninstall.sh
+scripts/rill_xray_agent_verify.sh
+systemd/rill-xray-agent-agent.service
+systemd/rill-xray-agent-runtime.service
+systemd/rill-xray-agent-xray-observe.path
+systemd/rill-xray-agent-xray-observe.service
+systemd/rill-xray-agent-xray-observe.timer
+
+--- staged install artifacts ---
+total 4
+drwxr-x--- 1 root root 128 Aug 10 16:04 .
+drwxr-xr-x 1 root root 128 Aug 10 16:04 ..
+-rw-r----- 1 root root 650 Aug 10 16:04 config.json
+drwxr-x--- 1 root root 224 Aug 10 16:04 scripts
+total 44
+drwxr-x--- 1 root root   224 Aug 10 16:04 .
+drwxr-x--- 1 root root   128 Aug 10 16:04 ..
+-rwxr-xr-x 1 root root  2932 Aug 10 16:04 rill_xray_agent_install.sh
+-rwxr-xr-x 1 root root 18602 Aug 10 16:04 rill_xray_agent_manager.sh
+-rwxr-xr-x 1 root root  3240 Aug 10 16:04 rill_xray_agent_observe.py
+-rwxr-xr-x 1 root root  9022 Aug 10 16:04 rill_xray_agent_uninstall.sh
+-rwxr-xr-x 1 root root  1964 Aug 10 16:04 rill_xray_agent_verify.sh
+
+total 12
+drwxr-xr-x 1 root root  160 Aug 10 16:04 .
+drwxr-xr-x 1 root root  192 Aug 10 16:04 ..
+-rwxr-xr-x 1 root root  190 Jan  1  1970 rill-xray-agent
+-rwxr-xr-x 1 root root  572 Jan  1  1970 rill-xray-agent-agent
+-rwxr-xr-x 1 root root 1105 Jan  1  1970 rill-xray-agent-runtime
+
+total 20
+drwxr-x--- 1 root root 224 Aug 10 16:04 .
+drwxr-xr-x 1 root root  96 Aug 10 16:04 ..
+-rw-r--r-- 1 root root 701 Aug 10 16:04 rill-xray-agent-agent.service
+-rw-r--r-- 1 root root 539 Aug 10 16:04 rill-xray-agent-runtime.service
+-rw-r--r-- 1 root root 197 Aug 10 16:04 rill-xray-agent-xray-observe.path
+-rw-r--r-- 1 root root 349 Aug 10 16:04 rill-xray-agent-xray-observe.service
+-rw-r--r-- 1 root root 175 Aug 10 16:04 rill-xray-agent-xray-observe.timer
+
+--- default config invariants ---
+  mode=observe-only (want observe-only)
+  routeAssistEnabled=False (want False)
+  boundedAutoAllowed=False (want False)
+  localOnly=True (want True)
+default config invariants PASS
+
+=== TARGETED BOOTSTRAP DELIVERY SMOKE: PASS ===
+smoke runner exit=0
