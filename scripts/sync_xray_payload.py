@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
-"""Sync Rill source into the Xray integration payload, rebuild the bundle, and
-pin the bootstrap SHA. Reproducible output: fixed mtime, sorted entries."""
+"""Sync Rill source (config + Python payload) into the Xray integration
+payload, rebuild the bundle, and pin the bootstrap SHA. Reproducible output:
+fixed mtime, sorted entries. config/default.json mirrors byte-identically
+into rill_payload/config/default.json; stale payload config entries fail.
+Integration systemd units are intentionally NOT mirrored from standalone."""
 import hashlib
 import io
 import shutil
@@ -8,14 +11,38 @@ import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+SOURCE_CONFIG = ROOT / 'config' / 'default.json'
 SOURCE_PY = ROOT / 'python' / 'rill_xray_agent'
 REPO_FILES = ROOT / 'integrations' / 'xray_bash_onekey' / 'repository_files'
+PAYLOAD_CONFIG_DIR = REPO_FILES / 'rill_payload' / 'config'
+PAYLOAD_CONFIG = PAYLOAD_CONFIG_DIR / 'default.json'
 PAYLOAD_PY = REPO_FILES / 'rill_payload' / 'python' / 'rill_xray_agent'
 ASSETS = ROOT / 'integrations' / 'xray_bash_onekey' / 'assets'
 BOOTSTRAP = REPO_FILES / 'scripts' / 'rill_xray_agent_bootstrap.sh'
 BUNDLE_NAME = 'rill-xray-agent-xray-bundle.tar.gz'
 BUNDLE_TOPS = ('rill_payload', 'scripts', 'systemd')
 BUNDLE_EXCLUDE = {'rill_xray_agent_bootstrap.sh'}
+
+
+def sync_config() -> list[str]:
+    """Mirror the root config/default.json into the canonical Xray payload.
+
+    Byte-identical, deterministic, change-reported. The payload mirror must
+    never silently diverge: any file left over from an earlier source state
+    is a fail (not silently preserved).
+    """
+    if not SOURCE_CONFIG.is_file():
+        raise SystemExit(f'missing source config: {SOURCE_CONFIG}')
+    changed = []
+    if not PAYLOAD_CONFIG.exists() or PAYLOAD_CONFIG.read_bytes() != SOURCE_CONFIG.read_bytes():
+        PAYLOAD_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(SOURCE_CONFIG, PAYLOAD_CONFIG)
+        changed.append('config: default.json')
+    stale = [p.name for p in sorted(PAYLOAD_CONFIG_DIR.glob('*.json'))
+             if p.name != 'default.json' and not (ROOT / 'config' / p.name).exists()]
+    if stale:
+        raise SystemExit(f'stale payload config entries (failing closed): {", ".join(stale)}')
+    return changed
 
 
 def sync_payload() -> list[str]:
@@ -80,7 +107,8 @@ def pin_bundle() -> str:
 
 
 def main() -> None:
-    changed = sync_payload()
+    changed = sync_config()
+    changed += sync_payload()
     digest = pin_bundle()
     print('synced payload:')
     for c in changed:
