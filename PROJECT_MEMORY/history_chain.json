@@ -99,6 +99,11 @@
       "path": "history/2026-08-11-r7-v010-stable-qualification.md",
       "previousSha256": "cff01339c34c4c0f830cfa1e2b39220ef37d7e25c1f05e62bce325edb5a0c997",
       "sha256": "5a50974ef06b4a4b7ed1e06869ba98b132ce356ba30501cf35b813b814c42322"
+    },
+    {
+      "path": "history/2026-08-11-r1-02-operational-intelligence.md",
+      "previousSha256": "5a50974ef06b4a4b7ed1e06869ba98b132ce356ba30501cf35b813b814c42322",
+      "sha256": "d48e2ab6b68b9f91aa9d75eeca0ac431ccc197898234492e94ab366767e45d2d"
     }
   ],
   "schemaVersion": 1
