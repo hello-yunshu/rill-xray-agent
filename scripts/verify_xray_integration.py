@@ -44,6 +44,11 @@ for name, blob in source_files.items():
 for p in payload_py.glob("*.py"):
     assert p.name in source_files, f"stale payload file {p.name}"
 
+config_src = root / "config/default.json"
+config_dst = repository_files / "rill_payload/config/default.json"
+assert config_dst.is_file(), "payload config missing"
+assert config_dst.read_bytes() == config_src.read_bytes(), "payload config drift: default.json"
+
 expected_re = re.compile(r"^EXPECTED_SHA256=([0-9a-f]{64})$", re.M)
 bootstrap = (repository_files / "scripts/rill_xray_agent_bootstrap.sh").read_text()
 match = expected_re.search(bootstrap)
