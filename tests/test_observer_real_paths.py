@@ -33,9 +33,11 @@ class Tests(unittest.TestCase):
             (root / "conf/xray").mkdir(parents=True)
             (root / "conf/xray/config.json").write_text('{"inbounds":[]}')
             status = tmp / "status.json"
+            history = tmp / "history"
             env = dict(os.environ)
             env["RILL_XRAY_HOST_ROOT"] = str(root)
             env["RILL_XRAY_AGENT_OUTPUT"] = str(status)
+            env["RILL_XRAY_AGENT_HISTORY"] = str(history)
             proc = subprocess.run(
                 ["python3", str(SCRIPTS / "rill_xray_agent_observe.py")],
                 env=env,
