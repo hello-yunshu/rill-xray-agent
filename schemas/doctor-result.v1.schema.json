@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canApply": {
+      "const": false
+    },
+    "confidenceBand": {
+      "enum": [
+        "high",
+        "medium",
+        "low",
+        "insufficient-evidence"
+      ]
+    },
+    "diagnosisCode": {
+      "type": "string"
+    },
+    "diagnosisId": {
+      "type": "string"
+    },
+    "engineGeneration": {
+      "const": 1
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "inferences": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "executionAllowed": {
+            "const": false
+          },
+          "priority": {
+            "type": "string"
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "requiresRoot": {
+            "type": "boolean"
+          },
+          "reversible": {
+            "type": "boolean"
+          },
+          "risk": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "executionAllowed"
+        ],
+        "type": "object"
+      }
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "severity": {
+      "enum": [
+        "info",
+        "low",
+        "medium",
+        "high"
+      ]
+    },
+    "status": {
+      "enum": [
+        "healthy",
+        "degraded",
+        "fault",
+        "insufficient-evidence"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "diagnosisId",
+    "engineGeneration",
+    "status",
+    "severity",
+    "diagnosisCode",
+    "confidenceBand",
+    "summary",
+    "facts",
+    "inferences",
+    "recommendations",
+    "limitations",
+    "canApply"
+  ],
+  "type": "object"
+}
