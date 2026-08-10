@@ -1,7 +1,7 @@
-# Rill Xray Agent
+# Rill Xray Agent 0.1.0
 
 > A local-first, fail-closed operational observation and decision-support agent for Xray management scripts.
-> Ships the portable Runtime, restricted Agent, audit chain, state and transaction recovery, backup safety, systemd units, Xray host integration files, tests, release gates and an AI execution prompt.
+> Ships the portable Runtime, restricted Agent, audit chain, state and transaction recovery, backup safety, systemd units, Xray host integration files, tests and release gates.
 
 [中文](./README.md) · [Docs](./docs/)
 
@@ -37,7 +37,7 @@ python3 scripts/verify_project_memory.py
 python3 scripts/run_all_checks.py
 ```
 
-CLI examples (default socket `/run/rill-xray-agent/agent.sock`):
+CLI examples (default socket `/run/rill-xray-agent/runtime.sock`):
 
 ```bash
 rill-xray-agent --json status
@@ -55,7 +55,13 @@ rill-xray-agent mode observe-only
 
 ## Status
 
-Currently **pre-release** (`v0.1.0-rc.1`), not yet formally released. Real-host systemd, Xray/Nginx/Fail2ban and ShellCheck pre-release qualification remain open items.
+**Rill Xray Agent 0.1.0** (stable).
+
+- Portable Python Runtime is the supported runtime; Native Rust remains experimental / unsupported (`nativeRuntimeSupported=false`).
+- Default `observe-only`; Route Assist OFF; bounded auto OFF; local-only.
+- Docker qualification completed (fresh 20/20, Debian 12 / Ubuntu 24.04 systemd PID1, five-mode, deterministic A/B, bootstrap delivery).
+- Real bare-metal / VM qualification: **NOT RUN** (deferred by owner release policy; not claimed as PASS).
+- Known governance item: legacy public prompt orphan objects remain DEFERRED / STILL OPEN; they do not block 0.1.0.
 
 ## License
 

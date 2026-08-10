@@ -14,6 +14,91 @@
       "path": "history/2026-08-06-host-integration-and-rc.md",
       "previousSha256": "6d2968dcb71efacba5a932d56b8e474286eb51d9ae98cb5020ba0e22d7b8e5c2",
       "sha256": "08f13f049a8cab2130d7ac19e93b4428a35e6ca30911ebde6881d47313965b29"
+    },
+    {
+      "path": "history/2026-08-06-joint-audit-release-blocked.md",
+      "previousSha256": "08f13f049a8cab2130d7ac19e93b4428a35e6ca30911ebde6881d47313965b29",
+      "sha256": "79ab3018f92ee2a2923a26b7bd4b2d0182fd98e413b348606a37a6758e2fbdf0"
+    },
+    {
+      "path": "history/2026-08-06-p0-2-audit-fix.md",
+      "previousSha256": "79ab3018f92ee2a2923a26b7bd4b2d0182fd98e413b348606a37a6758e2fbdf0",
+      "sha256": "89aaa0ce6b45bc01d14b5384a48bc93d0e536017d0a2f3ddd0d8153f4e901c3c"
+    },
+    {
+      "path": "history/2026-08-06-p0-3-closed-ledger.md",
+      "previousSha256": "89aaa0ce6b45bc01d14b5384a48bc93d0e536017d0a2f3ddd0d8153f4e901c3c",
+      "sha256": "ee3c681f0884cc06c39c63ca6de08c151352fec9255a6ed8c4e36748f7ec062e"
+    },
+    {
+      "path": "history/2026-08-06-p0-4-root-transaction.md",
+      "previousSha256": "ee3c681f0884cc06c39c63ca6de08c151352fec9255a6ed8c4e36748f7ec062e",
+      "sha256": "9291847f93f9bf3e0c51895904c2acf1157f4926cc53001590fda92820cd39dd"
+    },
+    {
+      "path": "history/2026-08-06-security-ipc-payload.md",
+      "previousSha256": "9291847f93f9bf3e0c51895904c2acf1157f4926cc53001590fda92820cd39dd",
+      "sha256": "ed5a4d65c532e3a047b0cd7287ba55e832ddbdbaaca3ac62d6d453407fca0917"
+    },
+    {
+      "path": "history/2026-08-06-cross-repo-sync-gate.md",
+      "previousSha256": "ed5a4d65c532e3a047b0cd7287ba55e832ddbdbaaca3ac62d6d453407fca0917",
+      "sha256": "1d8d16c7fc3a98aacc254cf4d16166907a9c6fbeb00782b1f0a6d6aec431b3a9"
+    },
+    {
+      "path": "history/2026-08-06-xray-p0-5-6-7-closed.md",
+      "previousSha256": "1d8d16c7fc3a98aacc254cf4d16166907a9c6fbeb00782b1f0a6d6aec431b3a9",
+      "sha256": "10537de8ace4e9a00569baa810fbd8148f5cc9b99e74e653c35f93b009a0b851"
+    },
+    {
+      "path": "history/2026-08-06-xray-requal-evidence.md",
+      "previousSha256": "10537de8ace4e9a00569baa810fbd8148f5cc9b99e74e653c35f93b009a0b851",
+      "sha256": "e3d63a769be330c8d771df57f741c7ea308fa47169875c7674d3923f9ab24bb6"
+    },
+    {
+      "path": "history/2026-08-07-merge-blockers-fix.md",
+      "previousSha256": "e3d63a769be330c8d771df57f741c7ea308fa47169875c7674d3923f9ab24bb6",
+      "sha256": "58ed2db32d3f9eebd791f256931c384ab5d563edbc236244ff630b0e9d53c2e7"
+    },
+    {
+      "path": "history/2026-08-07-ci-green.md",
+      "previousSha256": "58ed2db32d3f9eebd791f256931c384ab5d563edbc236244ff630b0e9d53c2e7",
+      "sha256": "89992251ebfb24c4dd21fb3c3f755caa2344887f73595f77c1c3d36f29d41848"
+    },
+    {
+      "path": "history/2026-08-08-final-audit-docker.md",
+      "previousSha256": "89992251ebfb24c4dd21fb3c3f755caa2344887f73595f77c1c3d36f29d41848",
+      "sha256": "0de0460b1725bf95899224c96933c3c70b6d75d3fb9ed8ffd7f435a0accd3b32"
+    },
+    {
+      "path": "history/2026-08-09-r4-sealing-docker.md",
+      "previousSha256": "0de0460b1725bf95899224c96933c3c70b6d75d3fb9ed8ffd7f435a0accd3b32",
+      "sha256": "6d15b1e887113efc5c55b3057232b91fdd7fcfdda5235a55d9675bb9cf425b0e"
+    },
+    {
+      "path": "history/2026-08-09-r4-qualification.md",
+      "previousSha256": "6d15b1e887113efc5c55b3057232b91fdd7fcfdda5235a55d9675bb9cf425b0e",
+      "sha256": "f6ee821abe3d35ad97cf163154e006c99ad5bc56e408db200e610bd7f1a72a8c"
+    },
+    {
+      "path": "history/2026-08-09-r4-final-heads.md",
+      "previousSha256": "f6ee821abe3d35ad97cf163154e006c99ad5bc56e408db200e610bd7f1a72a8c",
+      "sha256": "7f29c0d40dfcfac739d9f76f5a75772618161ce7737581d77543189a67a883e3"
+    },
+    {
+      "path": "history/2026-08-09-r5-frozen-subject-qualification.md",
+      "previousSha256": "7f29c0d40dfcfac739d9f76f5a75772618161ce7737581d77543189a67a883e3",
+      "sha256": "4e462033e4bb6d3b95aaf06e884e25bcaa7c47986767a52c016c90be4cfbdf9f"
+    },
+    {
+      "path": "history/2026-08-09-r6-bootstrap-delivery-qualification.md",
+      "previousSha256": "4e462033e4bb6d3b95aaf06e884e25bcaa7c47986767a52c016c90be4cfbdf9f",
+      "sha256": "cff01339c34c4c0f830cfa1e2b39220ef37d7e25c1f05e62bce325edb5a0c997"
+    },
+    {
+      "path": "history/2026-08-11-r7-v010-stable-qualification.md",
+      "previousSha256": "cff01339c34c4c0f830cfa1e2b39220ef37d7e25c1f05e62bce325edb5a0c997",
+      "sha256": "5a50974ef06b4a4b7ed1e06869ba98b132ce356ba30501cf35b813b814c42322"
     }
   ],
   "schemaVersion": 1
