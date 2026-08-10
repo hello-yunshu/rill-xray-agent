@@ -25,6 +25,8 @@ class Tests(unittest.TestCase):
                 continue
             if path == identity_root or identity_root in path.parents:
                 continue
+            if path.is_file() and path.suffix == ".log" and "qualification" in path.parts:
+                continue
             self.assertNotIn(token, path.as_posix().lower())
             if path.is_file() and path.name != "PACKAGE_SHA256SUMS":
                 self.assertNotIn(token, path.read_text(errors="ignore").lower(), str(path))

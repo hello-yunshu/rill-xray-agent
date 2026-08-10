@@ -40,6 +40,11 @@ for path in root.rglob("*"):
     if not in_integration and forbidden in rel.as_posix().lower():
         errors.append(f"forbidden identity in path: {rel}")
     if path.is_file() and path.name != "PACKAGE_SHA256SUMS" and not in_integration:
+        # Qualification logs are sealed evidence that legitimately contain
+        # Xray runtime path output (e.g. /etc/<host>/conf/xray/config.json).
+        # Mirror the package-identity exemption in tests/test_package_identity.py.
+        if path.suffix == ".log" and "qualification" in rel.parts:
+            continue
         if forbidden in path.read_text(errors="ignore").lower():
             errors.append(f"forbidden identity in content: {rel}")
 if (root / "Cargo.lock").exists():
