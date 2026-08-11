@@ -39,10 +39,48 @@ not modified by 0.2 development.
   (`User=root Group=rill-xray-agent UMask=0027`) and the runtime unit
   (`ReadOnlyPaths=/var/lib/rill-xray-agent-xray`).
 
+## 0.2 P1 convergence fix (this round, commits `daec959`/`9062414`/`862e778`)
+- **EventJournal torn-tail fail-closed (P1-1)**: a torn (newline-incomplete)
+  tail is legal only on the NEWEST active segment (crash torn write -> writer
+  truncates, reader skips). A partial tail on any closed historical segment
+  is evidence corruption and fails closed (`EventJournalError` "torn tail in
+  closed segment") for writers AND readers instead of silent truncation.
+- **Segment aggregation (P1-2)**: appends reuse the active segment and rotate
+  exactly once at the `segment_bytes` boundary (`nextSegment` = newest+1),
+  instead of creating one segment per event. The journal is a bounded
+  segmented ring again; crash-safety contract unchanged. Regression suite
+  `tests/test_event_journal_segmenting.py` (cases A-D), plus
+  `test_duplicate_sequence_fails_closed` updated for aggregation.
+- **Closed-ledger feedback identity (P1-3)**: a completed Doctor decision
+  evicted to the ClosedLedger lost its feedback projection identity
+  (capability/modelGeneration), degrading exact feedback replays to a
+  different payload hash (false conflict). Eviction tombstones now persist the
+  SAFE non-sensitive identity metadata; the evicted-replay path rebuilds the
+  canonical projection from it. Exact replay stays idempotent after eviction
+  and across Runtime restart; changed outcome/helpful/diagnosisCorrect still
+  fails closed; legacy tombstones keep the old fallback. Regression suite
+  `tests/test_closed_feedback_replay.py`.
+- **Bootstrap delivery regression restored**: the mandatory delivery proof
+  (`sudo bash .github/test/test_rill_bootstrap_delivery.sh`) was removed from
+  the Xray host suite in `3281a83`; restored in both the Xray suite and the
+  Rill mirror (`integrations/xray_bash_onekey/repository_files/.github/test/
+  test_rill_xray_agent.sh`).
+- **Targeted OI PID1 qualification (P1-4)**: the copied generic 66-check
+  PID1 logs were replaced with targeted OI logs produced on fresh
+  systemd-PID1 containers against the frozen 0.2 tree (bundle
+  `00c0ee1b770e`, SHA-verified bootstrap install): systemd PID1, bootstrap
+  re-run idempotent, config invariants, DAC observation contract (read
+  allowed / overwrite + history-create denied, 640/2750/socket 660), OI
+  lifecycle observe->timeline->diagnose->feedback->inspect, diagnosis
+  idempotency, feedback accepted then exact-replay idempotent after restart.
+  Debian 12 + Ubuntu 24.04 both 24/24 PASS
+  (`qualification/debian12-oi02-pid1.log`,
+  `qualification/ubuntu2404-oi02-pid1.log`).
+
 ## Production identity (canonical pin, updated this round)
-- Canonical Rill production commit: `cdd0f50f2d99597958f686dc2b12030f6cc9655d`
+- Canonical Rill production commit: `862e7781ae708ed2397faa9ac2e086ecb828b197`
   (Xray workflow `RILL_CANONICAL_COMMIT` pin).
-- Canonical bundle SHA-256: `fb86878a1b6b410589cd1b0efc86ef5a07550d9953228ce1f0fd4a7dd8587893`
+- Canonical bundle SHA-256: `00c0ee1b770e3bfd3316b5d1c3a7143b1dccf159755fa2dd26594c0b92dc13e3`
 
 ## Safety invariants (regression-tested, unchanged from v0.1.0, re-confirmed live)
 - `routeAssistEnabled=false`, `boundedAutoAllowed=false`, `canApply=false`,
@@ -57,15 +95,16 @@ not modified by 0.2 development.
 - Rill Source Gates: PASS on `feat/0.2-operational-intelligence` (PR #2).
 - Xray required CI: PASS on `feat/rill-xray-agent-0.2` (PR #55) — integration,
   security-regression, and five Install jobs all green.
-- Python gates: 23 isolated modules PASS (incl. new `test_cli_dispatch`);
-  canonical payload sync PASS (69 files, bundle `fb86878a1b6b…`);
-  package sums PASS (213).
+- Python gates: 26 isolated modules PASS (incl. `test_cli_dispatch`,
+  `test_event_journal_segmenting`, `test_closed_feedback_replay`);
+  canonical payload sync PASS (69 files, bundle `00c0ee1b770e`);
+  package sums PASS (217).
 - Xray integration (local root run): `test_rill_xray_agent` PASS,
   `test_rill_xray_agent_healthy` 17 PASS, `operational_intelligence` PASS,
   `test_rill_xray_agent_uninstall` 17 PASS, `test_rill_uninstall_durability`
   19 PASS.
 - **Targeted Docker PID1 qualification** (`qualification/*-oi02-pid1.log`):
-  Debian 12 and Ubuntu 24.04 both `66/66 PASS`; DAC contract + OI lifecycle
+  Debian 12 and Ubuntu 24.04 both `24/24 PASS`; DAC contract + OI lifecycle
   re-verified over real systemd sockets on both (observe->diagnose->feedback
   ->inspect->restart persistence->idempotency).
 
