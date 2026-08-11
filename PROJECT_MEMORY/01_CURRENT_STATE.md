@@ -23,26 +23,51 @@ not modified by 0.2 development.
   (sentinel/doctor/route).
 - **Xray integration**: Diagnostic menu item + non-interactive
   `diagnose`/`timeline` in the canonical manager and install.sh offline-safe
-  flags; canonical bundle resealed to `2578a1b…` and synced to Xray.
+  flags; canonical bundle resealed and synced to Xray.
 
-## Production identity (stable, not branch-HEAD)
-- Canonical Rill production commit: `ccb3fb67a2e29c35ede41364055c3e885cd4bae8`
-  (Xray workflow `RILL_CANONICAL_COMMIT` pin; the sums-only follow-up
-  `1ee01a5…` does not change canonical payload bytes).
-- Canonical bundle SHA-256: `2578a1b29beafaf4dcc63d6451e89b0c7aa2b23e27376e3cd5e08ebffdae8a69`
+## 0.2 audit fix (this round, committed `cdd0f50`)
+- **CLI feedback dispatch fix**: `feedback` subparser was registered but
+  missing from the CLI dispatch dict, so `--json feedback …` crashed with
+  `KeyError` instead of submitting structured feedback. Added `feedback` to
+  the dispatch table + regression test `tests/test_cli_dispatch.py` covering
+  every subcommand's dispatch path via a fake runtime.
+- **DAC observation permission contract** (root observer / unprivileged
+  Runtime): observation tree is `root:rill-xray-agent` with `2750` setgid
+  directories; the root observer writes `0640 root:rill-xray-agent`; the
+  Runtime user reads but cannot write or create. Enforced in
+  `rill_xray_agent_install.sh`, the observe systemd unit
+  (`User=root Group=rill-xray-agent UMask=0027`) and the runtime unit
+  (`ReadOnlyPaths=/var/lib/rill-xray-agent-xray`).
 
-## Safety invariants (regression-tested, unchanged from v0.1.0)
-- `routeAssistEnabled=false`, `boundedAutoAllowed=false`, `canApply=false`
+## Production identity (canonical pin, updated this round)
+- Canonical Rill production commit: `cdd0f50f2d99597958f686dc2b12030f6cc9655d`
+  (Xray workflow `RILL_CANONICAL_COMMIT` pin).
+- Canonical bundle SHA-256: `fb86878a1b6b410589cd1b0efc86ef5a07550d9953228ce1f0fd4a7dd8587893`
+
+## Safety invariants (regression-tested, unchanged from v0.1.0, re-confirmed live)
+- `routeAssistEnabled=false`, `boundedAutoAllowed=false`, `canApply=false`,
+  `executionAllowed=false`
 - Doctor never executes host commands / writes Xray config
 - Runtime never writes observer history; Agent never reads host config
 - raw config / secrets never persist
+- Live PID1 re-confirmation: runtime process runs as `rill-xray-agent`; Runtime
+  reads the observation but `Permission denied` on write/create.
 
 ## Evidence / CI
 - Rill Source Gates: PASS on `feat/0.2-operational-intelligence` (PR #2).
 - Xray required CI: PASS on `feat/rill-xray-agent-0.2` (PR #55) — integration,
   security-regression, and five Install jobs all green.
-- Python gates: 21 isolated modules PASS; canonical payload sync PASS
-  (69 files, bundle `2578a1b…`); package sums PASS (209).
+- Python gates: 23 isolated modules PASS (incl. new `test_cli_dispatch`);
+  canonical payload sync PASS (69 files, bundle `fb86878a1b6b…`);
+  package sums PASS (213).
+- Xray integration (local root run): `test_rill_xray_agent` PASS,
+  `test_rill_xray_agent_healthy` 17 PASS, `operational_intelligence` PASS,
+  `test_rill_xray_agent_uninstall` 17 PASS, `test_rill_uninstall_durability`
+  19 PASS.
+- **Targeted Docker PID1 qualification** (`qualification/*-oi02-pid1.log`):
+  Debian 12 and Ubuntu 24.04 both `66/66 PASS`; DAC contract + OI lifecycle
+  re-verified over real systemd sockets on both (observe->diagnose->feedback
+  ->inspect->restart persistence->idempotency).
 
 ## Dynamic GitHub state (resolve at audit time)
 - PR HEAD and required CI must be resolved from GitHub at audit time.
