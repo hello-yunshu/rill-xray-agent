@@ -1,0 +1,40 @@
+=== 1. systemd is PID 1 (fresh container) ===
+[PASS] PID1 is systemd
+running
+[PASS] systemctl is-system-running
+=== 2. bootstrap delivery (canonical 0.2 bundle) ===
+--- sha256sum $BUNDLE
+c264ffa767fbf8bbd7dcb1b16172dcd3084281fb57cdfc5a041df5af9b72cfdf  /repo/assets/rill-xray-agent-xray-bundle.tar.gz
+[PASS] bootstrap re-run idempotent (SHA-match -> staged installer)
+[PASS] staged CLI executable
+[PASS] staged config present
+[PASS] staged runtime unit present
+=== 3. installed config invariants (0.2 OI) ===
+[PASS] mode=observe-only
+[PASS] routeAssistEnabled=false
+[PASS] boundedAutoAllowed=false
+=== 4. DAC observation contract ===
+[PASS] observation root:rill-xray-agent
+[PASS] status dir 2750
+[PASS] Runtime can read observation
+[PASS] Runtime cannot overwrite observation
+[PASS] Runtime cannot create in history
+[PASS] no probe file left behind
+[PASS] socket peer-auth surface (runtime.sock)
+=== 5. OI lifecycle: observe -> timeline -> diagnose -> feedback -> inspect ===
+[PASS] timeline integrity valid
+[PASS] baseline_observed present
+[PASS] diagnose healthy
+[PASS] canApply=false (OI gates)
+=== 6. restart runtime, OI state persists ===
+[PASS] runtime active after restart
+[PASS] timeline valid after restart
+=== 7. runtime service identity (systemd unit) ===
+[PASS] runtime User/Group=rill-xray-agent
+=== 8. observer pending-transition crash recovery (canonical impl) ===
+Recovery scenarios (canonical observer_transition):
+  [PASS] Case H: pending recovered first when live changed
+  [PASS] Case J: malformed checkpoint fails closed
+[PASS] recovery scenarios (canonical observer_transition)
+
+RESULT: 24 PASS, 0 FAIL

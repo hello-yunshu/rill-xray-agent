@@ -18,13 +18,18 @@ if not args.post_integration:
     assert "RILL_XRAY_AGENT_INTEGRATION_SCHEMA" not in text
 else:
     for token in (
-        "RILL_XRAY_AGENT_INTEGRATION_SCHEMA=1",
+        "RILL_XRAY_AGENT_INTEGRATION_SCHEMA=2",
+        "RILL_XRAY_AGENT_INTEGRATION_SCHEMA_FLOOR=2",
+        "RILL_XRAY_AGENT_REQUIRED_CAPABILITIES",
+        "rxa_capability_present() {",
         'menu_item 9 "Rill Xray Agent"',
         "9) rxa_menu ;;",
         "--rill-agent-status",
         "--rill-agent-safe-disable",
         "--rill-agent-verify",
         "--rill-agent-uninstall",
+        "--rill-agent-diagnose",
+        "--rill-agent-timeline",
         "rxa_reconfigure_enter() {",
         "rxa_reconfigure_leave() {",
         # P0-x two-phase uninstall: prepare/commit/abort contract.
