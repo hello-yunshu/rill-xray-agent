@@ -21,12 +21,19 @@ def build(custom_block: str | None = None) -> str:
     block = canonical_block() if custom_block is None else custom_block
     return (
         "#!/usr/bin/env bash\n"
-        "RILL_XRAY_AGENT_INTEGRATION_SCHEMA=1\n"
+        "RILL_XRAY_AGENT_INTEGRATION_SCHEMA=2\n"
+        "RILL_XRAY_AGENT_INTEGRATION_SCHEMA_FLOOR=2\n"
+        'RILL_XRAY_AGENT_REQUIRED_CAPABILITIES="status verify mode safe-disable uninstall-v2 diagnose timeline"\n'
         'menu_item() { :; }\n'
         'menu_item 9 "Rill Xray Agent"\n'
         'case "${1:-}" in\n'
         "    9) rxa_menu ;;\n"
         "    --rill-agent-status) rxa_dispatch status ;;\n"
+        "    --rill-agent-verify) rxa_dispatch verify ;;\n"
+        "    --rill-agent-safe-disable) rxa_dispatch mode safe-disabled ;;\n"
+        "    --rill-agent-uninstall) rxa_dispatch uninstall ;;\n"
+        "    --rill-agent-diagnose) rxa_dispatch diagnose ;;\n"
+        "    --rill-agent-timeline) rxa_dispatch timeline ;;\n"
         "esac\n"
         + block
         + "\n"
@@ -62,7 +69,7 @@ class Tests(unittest.TestCase):
         self.assertEqual(run_guard(self.write(GOOD)), 0)
 
     def test_missing_schema_marker_rejected(self):
-        body = GOOD.replace("RILL_XRAY_AGENT_INTEGRATION_SCHEMA=1\n", "")
+        body = GOOD.replace("RILL_XRAY_AGENT_INTEGRATION_SCHEMA=2\n", "")
         self.assertEqual(run_guard(self.write(body)), 1)
 
     def test_missing_menu_entry_rejected(self):
@@ -73,6 +80,51 @@ class Tests(unittest.TestCase):
     def test_missing_cli_anchor_rejected(self):
         body = GOOD.replace("    --rill-agent-status) rxa_dispatch status ;;\n", "")
         self.assertNotEqual(run_guard(self.write(body)), 0)
+
+    # --- P1-2: integration capability floor (schema >= floor AND every
+    # required capability is a real off-line dispatch branch) ---
+
+    def test_higher_schema_with_all_capabilities_passes(self):
+        # Forward compatibility: a higher schema that still provides every
+        # required capability must keep passing (never a strict equality).
+        body = GOOD.replace("RILL_XRAY_AGENT_INTEGRATION_SCHEMA=2", "RILL_XRAY_AGENT_INTEGRATION_SCHEMA=3")
+        self.assertEqual(run_guard(self.write(body)), 0)
+
+    def test_schema_below_floor_rejected(self):
+        # schema=1 is below the floor (2) -> must fail closed.
+        body = GOOD.replace("RILL_XRAY_AGENT_INTEGRATION_SCHEMA=2\n", "RILL_XRAY_AGENT_INTEGRATION_SCHEMA=1\n")
+        self.assertEqual(run_guard(self.write(body)), 1)
+
+    def test_old_01_candidate_rejected(self):
+        # Old 0.1 candidates lack diagnose and timeline -> must fail.
+        body = GOOD.replace("    --rill-agent-diagnose) rxa_dispatch diagnose ;;\n", "") \
+                   .replace("    --rill-agent-timeline) rxa_dispatch timeline ;;\n", "")
+        self.assertEqual(run_guard(self.write(body)), 1)
+
+    def test_missing_diagnose_rejected(self):
+        body = GOOD.replace("    --rill-agent-diagnose) rxa_dispatch diagnose ;;\n", "")
+        self.assertEqual(run_guard(self.write(body)), 1)
+
+    def test_missing_timeline_rejected(self):
+        body = GOOD.replace("    --rill-agent-timeline) rxa_dispatch timeline ;;\n", "")
+        self.assertEqual(run_guard(self.write(body)), 1)
+
+    def test_comment_only_capability_rejected(self):
+        # A comment line mentioning the capability is not a real dispatch.
+        body = GOOD.replace("    --rill-agent-diagnose) rxa_dispatch diagnose ;;",
+                            "    # --rill-agent-diagnose) rxa_dispatch diagnose ;;")
+        self.assertEqual(run_guard(self.write(body)), 1)
+
+    def test_comment_only_capability_rejected_timeline(self):
+        body = GOOD.replace("    --rill-agent-timeline) rxa_dispatch timeline ;;",
+                            "    # --rill-agent-timeline) rxa_dispatch timeline ;;")
+        self.assertEqual(run_guard(self.write(body)), 1)
+
+    def test_string_only_capability_rejected(self):
+        # A bare string is not a live dispatch branch.
+        body = GOOD.replace("    --rill-agent-diagnose) rxa_dispatch diagnose ;;",
+                            '    echo "--rill-agent-diagnose) rxa_dispatch diagnose"')
+        self.assertEqual(run_guard(self.write(body)), 1)
 
     def test_comment_only_functions_rejected(self):
         # Strings in comments are not acceptable; the runtime probe requires
