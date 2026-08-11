@@ -104,6 +104,11 @@
       "path": "history/2026-08-11-r1-02-operational-intelligence.md",
       "previousSha256": "5a50974ef06b4a4b7ed1e06869ba98b132ce356ba30501cf35b813b814c42322",
       "sha256": "d48e2ab6b68b9f91aa9d75eeca0ac431ccc197898234492e94ab366767e45d2d"
+    },
+    {
+      "path": "history/2026-08-11-oi-audit-fix-cli-feedback-and-dac.md",
+      "previousSha256": "d48e2ab6b68b9f91aa9d75eeca0ac431ccc197898234492e94ab366767e45d2d",
+      "sha256": "5c28bf95a27458e09483236421db69512f9de6c8ea05eda4abb7f71e21cfde2c"
     }
   ],
   "schemaVersion": 1
