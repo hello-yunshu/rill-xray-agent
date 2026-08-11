@@ -99,6 +99,21 @@
       "path": "history/2026-08-11-r7-v010-stable-qualification.md",
       "previousSha256": "cff01339c34c4c0f830cfa1e2b39220ef37d7e25c1f05e62bce325edb5a0c997",
       "sha256": "5a50974ef06b4a4b7ed1e06869ba98b132ce356ba30501cf35b813b814c42322"
+    },
+    {
+      "path": "history/2026-08-11-r1-02-operational-intelligence.md",
+      "previousSha256": "5a50974ef06b4a4b7ed1e06869ba98b132ce356ba30501cf35b813b814c42322",
+      "sha256": "d48e2ab6b68b9f91aa9d75eeca0ac431ccc197898234492e94ab366767e45d2d"
+    },
+    {
+      "path": "history/2026-08-11-oi-audit-fix-cli-feedback-and-dac.md",
+      "previousSha256": "d48e2ab6b68b9f91aa9d75eeca0ac431ccc197898234492e94ab366767e45d2d",
+      "sha256": "5c28bf95a27458e09483236421db69512f9de6c8ea05eda4abb7f71e21cfde2c"
+    },
+    {
+      "path": "history/2026-08-11-p1-convergence-fix.md",
+      "previousSha256": "5c28bf95a27458e09483236421db69512f9de6c8ea05eda4abb7f71e21cfde2c",
+      "sha256": "7d860d46ee754d766329e7ee15519f743394e382015bdc3ccf6cd26d51da5ba3"
     }
   ],
   "schemaVersion": 1

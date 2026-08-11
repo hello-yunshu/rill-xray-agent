@@ -1,0 +1,35 @@
+=== 1. systemd is PID 1 ===
+[PASS] PID1 is systemd
+[PASS] systemctl is-system-running
+=== 2. bootstrap delivery (canonical bundle) ===
+--- sha256sum $BUNDLE
+f0a46dc2f63c154edee683a61392b2b7c5b26887031475984b10eb983e3e3660  /repo/assets/rill-xray-agent-xray-bundle.tar.gz
+[PASS] bootstrap EXPECTED_SHA256 == bundle sha (f0a46dc2f63c154edee683a61392b2b7c5b26887031475984b10eb983e3e3660)
+[PASS] bootstrap install exit 0
+=== 3. installed config invariants (0.2 OI) ===
+--- cat config.json
+{"boundedAutoAllowed":false,"candidate":"0.2.0-alpha.1","localLearningEnabled":false,"localOnly":true,"maximumConcurrentConnections":32,"maximumRequestBytes":1048576,"mode":"observe-only","nativeRuntimeSupported":false,"routeAssistEnabled":false,"routeStage":"observe","schemaVersion":1,"sentinelEnabled":true,"supportedRuntime":"portable-python","timeline":{"enabled":true,"historyPath":"/var/lib/rill-xray-agent-xray/history","maxEvents":200,"observationPath":"/var/lib/rill-xray-agent-xray/status/xray-observation.json","segmentBytes":524288,"totalBytes":4194304},"uploadEnabled":false,"userLevelStatistics":false,"xrayIntegration":{"enabled":false,"observeOnly":true,"reviewedCommit":"e3ba5d7474498fbb556b0cae741a629ebb3bf1cd","upstreamRepository":"hello-yunshu/Xray_bash_onekey"}}
+[PASS] mode=observe-only
+[PASS] routeAssistEnabled=false
+[PASS] boundedAutoAllowed=false
+=== 4. observer whole-transaction mutex (P1-1) ===
+[PASS] installed observer present
+[PASS] installed CLI present (/opt/rill-xray-agent/bin/rill-xray-agent)
+[PASS] concurrent observers rc A=0 B=0 (converge, no corruption)
+[PASS] observer lock root-owned regular file
+[PASS] observer lock not a symlink
+=== 5. journal integrity + diagnose + canApply=false ===
+[PASS] timeline integrity valid
+[PASS] diagnose canApply=false
+[PASS] diagnose healthy
+=== 6. nested symlink fail-closed (P1-3) ===
+xrayConfig= {'present': True, 'safe': False}
+SAFE_FALSE_OK
+[PASS] nested symlink observed as safe=false (fail-closed)
+=== 7. unsafe event semantics: safe->unsafe recorded once ===
+unsafe_path_detected count= 1
+[PASS] unsafe_path_detected recorded at most once (transition-only)
+=== 8. restart persistence + observe daemon ===
+[PASS] runtime active after restart
+
+RESULT: 18 PASS, 0 FAIL
