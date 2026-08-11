@@ -30,6 +30,9 @@
     "sequence": {
       "minimum": 1,
       "type": "integer"
+    },
+    "transitionId": {
+      "type": "string"
     }
   },
   "required": [
