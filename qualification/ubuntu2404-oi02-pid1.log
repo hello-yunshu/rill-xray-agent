@@ -1,92 +1,129 @@
+
 === 1. systemd is PID 1 (fresh container) ===
---- ps -p 1 -o comm= -> systemd
+--- ps -p 1 -o comm=
+systemd
 [PASS] PID1 is systemd
 [PASS] systemctl is-system-running
+
 === 2. bootstrap delivery (canonical 0.2 bundle) ===
---- sha256sum $bundle
-00c0ee1b770e3bfd3316b5d1c3a7143b1dccf159755fa2dd26594c0b92dc13e3  /repo/assets/rill-xray-agent-xray-bundle.tar.gz
---- bootstrap integrity exit code
+--- sha256sum $BUNDLE
+c11987eeac41af8dfa9ecc2f6acf6b3d0ef9120cb5bd0cb5d45fdf1f67e7e36e  /repo/assets/rill-xray-agent-xray-bundle.tar.gz
 [PASS] bootstrap re-run idempotent (SHA-match -> staged installer)
 [PASS] staged CLI executable
 [PASS] staged config present
 [PASS] staged runtime unit present
+
 === 3. installed config invariants (0.2 OI) ===
---- config -> {
-  "boundedAutoAllowed": false,
-  "mode": "observe-only",
-  "routeAssistEnabled": false
-}
+--- cat /etc/rill-xray-agent/config.json
+{"boundedAutoAllowed":false,"candidate":"0.2.0-alpha.1","localLearningEnabled":false,"localOnly":true,"maximumConcurrentConnections":32,"maximumRequestBytes":1048576,"mode":"observe-only","nativeRuntimeSupported":false,"routeAssistEnabled":false,"routeStage":"observe","schemaVersion":1,"sentinelEnabled":true,"supportedRuntime":"portable-python","timeline":{"enabled":true,"historyPath":"/var/lib/rill-xray-agent-xray/history","maxEvents":200,"observationPath":"/var/lib/rill-xray-agent-xray/status/xray-observation.json","segmentBytes":524288,"totalBytes":4194304},"uploadEnabled":false,"userLevelStatistics":false,"xrayIntegration":{"enabled":false,"observeOnly":true,"reviewedCommit":"e3ba5d7474498fbb556b0cae741a629ebb3bf1cd","upstreamRepository":"hello-yunshu/Xray_bash_onekey"}}
+mode= observe-only
+routeAssistEnabled= False
+boundedAutoAllowed= False
 [PASS] mode=observe-only
 [PASS] routeAssistEnabled=false
 [PASS] boundedAutoAllowed=false
+
 === 4. DAC observation contract ===
+--- ls -la /var/lib/rill-xray-agent-xray/status/xray-observation.json
+-rw-r----- 1 root rill-xray-agent 658 Aug 11 15:02 /var/lib/rill-xray-agent-xray/status/xray-observation.json
+--- stat -c '%U:%G %a' /var/lib/rill-xray-agent-xray/status/xray-observation.json
 root:rill-xray-agent 640
-root:rill-xray-agent 2750
---- Runtime (uid rill-xray-agent) READ observation
+[PASS] observation root:rill-xray-agent
+[PASS] status dir 2750
 [PASS] Runtime can read observation
---- Runtime WRITE observation (must be denied)
 [PASS] Runtime cannot overwrite observation
---- Runtime CREATE in history tree (must be denied)
 [PASS] Runtime cannot create in history
 [PASS] no probe file left behind
---- socket peer-auth surface (runtime.sock)
-rill-xray-agent:rill-xray-agent 660 /run/rill-xray-agent/runtime.sock
+--- ls -la /run/rill-xray-agent/ | grep -- -sock\? ; ls -la /run/rill-xray-agent/runtime.sock
+srw-rw---- 1 rill-xray-agent rill-xray-agent 0 Aug 11 15:02 /run/rill-xray-agent/runtime.sock
+[PASS] socket peer-auth surface (runtime.sock)
+
 === 5. OI lifecycle: observe -> timeline -> diagnose -> feedback -> inspect ===
---- timeline
-events: 1 integrity: valid
+{
+  "available": true,
+  "events": [
+    {
+      "capturedAtEpochSeconds": 1786460574,
+      "component": "agent",
+      "eventId": "d97cd5cea6c205602633dc416f92a9ca0b9730b94489446bf4b6c94812dc20e6",
+      "eventType": "baseline_observed",
+      "facts": {
+        "firstObservation": true
+      },
+      "sequence": 1
+    }
+  ],
+  "integrity": "valid"
+}
 [PASS] timeline integrity valid
 [PASS] baseline_observed present
---- diagnose
-diagnosisId: 3deb1789fb9a530e status: healthy canApply: False
+diagnosisId: bd2a75817aeb6b35d37d520d03d11346f7a650c5d2c9e5e9e19b029676c8b1fe status: healthy canApply: False
 [PASS] diagnose healthy
 [PASS] canApply=false (OI gates)
---- diagnosis idempotency (same evidence -> same diagnosisId)
-diagnosisId: 3deb1789fb9a530e
 [PASS] diagnosis idempotent (same decisionId)
 --- feedback (exact replay, P1-3 evicted-replay identity)
 {
-  "ok": true,
-  "requestId": "2f022be4-1880-4ca6-be8b-bdd7f2fb5bc4",
+  "auditEventHash": "f484577c43eb95610a261c8ef134ca63bd33184512405b4d774ac665af2af2ed",
+  "operationId": "22a2d0733e934cdc946a461beb952837",
   "result": {
-    "auditEventHash": "8d75bb2e2179b0c146942894476059b77db0e6e358f839f99284f96733283e43",
-    "operationId": "10d19fe7821746f8a3de215ca1abb71e",
-    "result": {
-      "accepted": true,
-      "pendingLedgerMutations": [],
-      "status": "accepted"
-    }
-  },
-  "schemaVersion": 3
+    "accepted": true,
+    "pendingLedgerMutations": [],
+    "status": "accepted"
+  }
 }
 [PASS] feedback accepted
 --- inspect
-diagnosisId: {'closed': None,
+{
+  "closed": null,
+  "completed": {
+    "acceptedAtEpochSeconds": 1786460575,
+    "identity": {
+      "capability": "doctor",
+      "createdAtEpochSeconds": 1786460574,
+      "decisionId": "bd2a75817aeb6b35d37d520d03d11346f7a650c5d2c9e5e9e19b029676c8b1fe",
+      "modelGeneration": 2
+    },
+    "payloadMeta": {
+      "capability": "doctor",
+      "decisionId": "bd2a75817aeb6b35d37d520d03d11346f7a650c5d2c9e5e9e19b029676c8b1fe",
+      "diagnosisCorrect": true,
+      "helpful": true,
+      "modelGeneration": 2,
+      "outcome": "resolved"
+    },
+    "payloadSha256": "91b7a2a0c9f0a2893dc1cf41a1217288663b69b34e449adbb5c2e0161e01bed6"
+  },
+  "pending": null
+}
 [PASS] inspect resolves decisionId
+
 === 6. restart runtime, OI state persists ===
 [PASS] runtime active after restart
 [PASS] timeline valid after restart
 --- feedback exact replay AFTER restart (closed-ledger metadata identity)
 {
-  "ok": true,
-  "requestId": "888f98f3-d5d9-4fad-ba34-a912fc840383",
+  "auditEventHash": null,
+  "operationId": null,
   "result": {
-    "auditEventHash": null,
-    "operationId": null,
-    "result": {
-      "accepted": true,
-      "status": "idempotent"
-    }
-  },
-  "schemaVersion": 3
+    "accepted": true,
+    "status": "idempotent"
+  }
 }
 [PASS] feedback replay idempotent after restart
---- diagnose after restart (idempotent re-register)
 [PASS] diagnose idempotent after restart
+
 === 7. runtime service identity (systemd unit) ===
---- User=rill-xray-agent
---- Group=rill-xray-agent
---- ReadOnlyPaths=/var/lib/rill-xray-agent-root /var/lib/rill-xray-agent-xray
---- UMask=0027
---- User=root
---- Group=rill-xray-agent
-RESULT: ALL PASS
+--- rill-xray-agent-runtime.service
+User=rill-xray-agent
+Group=rill-xray-agent
+ReadOnlyPaths=/var/lib/rill-xray-agent-root /var/lib/rill-xray-agent-xray
+UMask=0027
+--- rill-xray-agent-xray-observe.service
+User=root
+Group=rill-xray-agent
+UMask=0027
+--- runtime process identity
+rill-xr+ rill-xr+     508 python3
+[PASS] runtime User/Group=rill-xray-agent
+
+RESULT: 28 PASS, 0 FAIL
