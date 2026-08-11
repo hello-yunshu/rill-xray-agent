@@ -20,7 +20,51 @@
       "type": "string"
     },
     "engineGeneration": {
-      "const": 1
+      "const": 2
+    },
+    "evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "correlationWindowSeconds": {
+          "type": "integer"
+        },
+        "newestEventSequence": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "observationCapturedAtEpochSeconds": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "observationStatus": {
+          "enum": [
+            "fresh",
+            "stale",
+            "missing",
+            "invalid"
+          ]
+        },
+        "timelineStatus": {
+          "enum": [
+            "available",
+            "missing",
+            "corrupt",
+            "valid"
+          ]
+        }
+      },
+      "required": [
+        "observationStatus",
+        "timelineStatus"
+      ],
+      "type": "object"
+    },
+    "evidenceDigest": {
+      "type": "string"
     },
     "facts": {
       "type": "array",
@@ -110,6 +154,8 @@
     "inferences",
     "recommendations",
     "limitations",
+    "evidence",
+    "evidenceDigest",
     "canApply"
   ],
   "type": "object"
