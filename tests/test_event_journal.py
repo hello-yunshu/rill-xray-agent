@@ -57,6 +57,22 @@ class EventDerivationTests(unittest.TestCase):
         events = derive_events(_obs(), unsafe)
         self.assertIn('unsafe_path_detected', [e['eventType'] for e in events])
 
+    def test_unsafe_path_persistent_does_not_reemit(self):
+        unsafe = _obs(xrayConfig={'present': True, 'safe': False})
+        # safe -> unsafe emits once...
+        self.assertIn('unsafe_path_detected',
+                      [e['eventType'] for e in derive_events(_obs(), unsafe)])
+        # ...but persistent unsafe (unsafe -> unsafe) must emit NOTHING, so a
+        # 5-minute timer cannot fill the bounded journal with repeated events.
+        self.assertEqual([], derive_events(unsafe, unsafe))
+
+    def test_unsafe_path_recovered_emitted_once(self):
+        unsafe = _obs(xrayConfig={'present': True, 'safe': False})
+        recovered = derive_events(unsafe, _obs())
+        self.assertIn('unsafe_path_recovered', [e['eventType'] for e in recovered])
+        # recovery is a transition; a subsequent safe -> safe emits nothing.
+        self.assertEqual([], derive_events(_obs(), _obs()))
+
     def test_event_types_are_allowed(self):
         for e in derive_events(None, _obs()):
             self.assertIn(e['eventType'], EVENT_TYPES)
