@@ -77,10 +77,41 @@ not modified by 0.2 development.
   (`qualification/debian12-oi02-pid1.log`,
   `qualification/ubuntu2404-oi02-pid1.log`).
 
+## 0.2 Phase-1 final observer convergence (this round, commits `704d367`/`98be0c4`)
+- **P1-A recoverable pending transition (live-current-changed recovery)**:
+  the checkpoint now persists a safe projection of the pending current
+  (`schemaVersion 2`, `currentObservation`), so an in-flight O0->O1 is
+  independently recoverable even when the host moved to O2 while the observer
+  was down. Restart FIRST completes the pending O0->O1 from the checkpoint,
+  THEN processes the new live O2, yielding the correct O0->O1->O2 chain
+  instead of a bogus O0->O1 + O0->O2. See Case H/I regression tests.
+- **P1-B checkpoint fail-closed**: a checkpoint that exists but cannot be
+  trusted - malformed JSON, empty, wrong/unsupported schema, missing or
+  ill-typed fields, invalid digests, duplicate or invalid eventTransitionIds,
+  symlink, or non-regular file - raises `ObserverTransitionError` and is never
+  silently discarded. Only a truly absent checkpoint returns `None` (fresh
+  start). The checkpoint `eventTransitionIds` are a real recovery contract:
+  re-derived ids must match exactly or recovery fails closed (no
+  recompute-and-replace). Observer exits non-zero, journal/observation/
+  checkpoint untouched. See Cases J-L.
+- **Observer runtime integration**: `rill_xray_agent_observe.py` calls
+  `recover_pending_transition` before committing any new live transition; the
+  production entry path now exercises recover-then-commit, not just the unit
+  helper. Checkpoint write/clear use atomic_write_json + parent-dir fsync
+  (durable unlink included).
+- **Fault matrix**: `tests/test_observer_transition_recovery.py` covers
+  Cases A-M (baseline, single/multi-event partial commit, observation
+  committed before clear, genuine repeated transition not over-deduped,
+  pending recovered first when live changed, multi-event pending + live
+  change, malformed/symlink/non-regular checkpoint, id mismatch, inconsistent
+  projection, returnCode-only change). Same-booleans-but-returnCode-changed
+  (Case M) proves a pending transition is defined by the checkpoint, never
+  re-derived from a coincidentally-equal current digest.
+
 ## Production identity (canonical pin, updated this round)
-- Canonical Rill production commit: `862e7781ae708ed2397faa9ac2e086ecb828b197`
-  (Xray workflow `RILL_CANONICAL_COMMIT` pin).
-- Canonical bundle SHA-256: `00c0ee1b770e3bfd3316b5d1c3a7143b1dccf159755fa2dd26594c0b92dc13e3`
+- Canonical Rill production commit: `98be0c492661a83c0e13b9b6701b4657e5cbf691`
+  (chore(canonical) reseal `98be0c4`; Xray workflow `RILL_CANONICAL_COMMIT` pin).
+- Canonical bundle SHA-256: `c264ffa767fbf8bbd7dcb1b16172dcd3084281fb57cdfc5a041df5af9b72cfdf`
 
 ## Safety invariants (regression-tested, unchanged from v0.1.0, re-confirmed live)
 - `routeAssistEnabled=false`, `boundedAutoAllowed=false`, `canApply=false`,
@@ -95,10 +126,11 @@ not modified by 0.2 development.
 - Rill Source Gates: PASS on `feat/0.2-operational-intelligence` (PR #2).
 - Xray required CI: PASS on `feat/rill-xray-agent-0.2` (PR #55) — integration,
   security-regression, and five Install jobs all green.
-- Python gates: 26 isolated modules PASS (incl. `test_cli_dispatch`,
-  `test_event_journal_segmenting`, `test_closed_feedback_replay`);
-  canonical payload sync PASS (69 files, bundle `00c0ee1b770e`);
-  package sums PASS (217).
+- Python gates: 28 isolated modules PASS (incl. `test_observer_transition_recovery`
+  Cases A-M, `test_event_journal_segmenting`, `test_closed_feedback_replay`,
+  `test_cli_dispatch`); canonical payload sync PASS (71 files, bundle
+  `c264ffa767fb`); package sums PASS (222).
+- Observer transition recovery: 19/19 PASS (`test_observer_transition_recovery`).
 - Xray integration (local root run): `test_rill_xray_agent` PASS,
   `test_rill_xray_agent_healthy` 17 PASS, `operational_intelligence` PASS,
   `test_rill_xray_agent_uninstall` 17 PASS, `test_rill_uninstall_durability`
@@ -107,6 +139,11 @@ not modified by 0.2 development.
   Debian 12 and Ubuntu 24.04 both `24/24 PASS`; DAC contract + OI lifecycle
   re-verified over real systemd sockets on both (observe->diagnose->feedback
   ->inspect->restart persistence->idempotency).
+- **Re-qualification on the recoverable-transition bundle** (`98be0c4`,
+  `qualification/debian12-oi-full.log`, `qualification/ubuntu2404-oi-full.log`):
+  Debian 12 and Ubuntu 24.04 both `24/24 PASS` on the new bundle, including
+  the observer pending-transition recovery scenarios (Case H + Case J) run
+  against the installed canonical `observer_transition` implementation.
 
 ## Dynamic GitHub state (resolve at audit time)
 - PR HEAD and required CI must be resolved from GitHub at audit time.

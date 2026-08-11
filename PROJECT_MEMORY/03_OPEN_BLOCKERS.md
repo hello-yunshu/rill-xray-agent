@@ -13,9 +13,14 @@
 - RC.2 / Pre-release / Stable: BLOCKED. Do not auto-create RC.2.
 - Independent zero-P0 audit: running against the frozen production identity
   at the time of this record.
-- P1 convergence items: EventJournal torn-tail fail-closed + segment
-  aggregation, closed-ledger feedback identity metadata, bootstrap delivery
-  regression restore, targeted OI PID1 qualification (Debian 12 + Ubuntu
-  24.04) — all CLOSED this round (commits `daec959`/`9062414`/`862e778` +
-  evidence `f8685ad`). Remaining for 0.2 RC: deep 20/20, five-mode,
-  deterministic A/B, bootstrap re-qualification, real-host PID1.
+- P1 convergence items — CLOSED this round:
+  - EventJournal torn-tail fail-closed + segment aggregation + closed-ledger
+    feedback identity metadata + bootstrap delivery regression restore +
+    targeted OI PID1 qualification (Debian 12 + Ubuntu 24.04) — closed
+    previously (commits `daec959`/`9062414`/`862e778`).
+  - EventJournal sequence continuity + segment continuity — closed (`e5ab62b`).
+  - Observer transition crash idempotency + recoverable pending transition
+    across live-current changes + checkpoint fail-closed (P1-A/P1-B) — closed
+    this round (`704d367`/`98be0c4`), together with the observer recovery
+    integration. Remaining for 0.2 RC: deep 20/20, five-mode, deterministic
+    A/B, bootstrap re-qualification, real-host PID1.
