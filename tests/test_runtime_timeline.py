@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -58,7 +59,10 @@ class RuntimeTimelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             r = Path(td)
             (r / 'status').mkdir(parents=True)
-            (r / 'status' / 'xray-observation.json').write_text(json.dumps(_obs()))
+            # The diagnose path uses the real clock; a fresh observation is
+            # required for HEALTHY, so capture with the current time.
+            (r / 'status' / 'xray-observation.json').write_text(
+                json.dumps(_obs(capturedAtEpochSeconds=int(time.time()))))
             svc = self._svc(td)
             out = svc.handle({'schemaVersion': 3, 'requestId': 'x', 'method': 'diagnose',
                               'body': {}}, peer_uid=os.getuid())
