@@ -198,13 +198,17 @@ class CrashRecoveryTests(unittest.TestCase):
             j = EventJournal(root)
             _append(j, 2)
             seg = root / 'events-000001.jsonl'
-            line = seg.read_text().strip()
+            # Events aggregate into the ACTIVE segment (P1-2): read the LAST
+            # committed line of the segment, tamper it and APPEND it back so
+            # the segment holds two events with the same sequence.
+            line = seg.read_text().strip().split('\n')[-1]
             evt = json.loads(line)
             evt['sequence'] = 2  # force a duplicate of the second event
             # recompute eventId so only the sequence duplication is the fault
             from rill_xray_agent.canonical import digest as _digest
             evt['eventId'] = _digest({k: v for k, v in evt.items() if k != 'eventId'})
-            seg.write_text(json.dumps(evt, sort_keys=True) + '\n')
+            with seg.open('a') as f:
+                f.write(json.dumps(evt, sort_keys=True) + '\n')
             j2 = EventJournal(root)
             with self.assertRaises(EventJournalError):
                 j2.read()
