@@ -14,7 +14,7 @@
 - Stable 1.0 **tag**: GATED on the EXTERNAL P0 above. `stableAllowed=false`.
   Do not create the stable 1.0 tag until the prompt purge is closed.
 - CLOSED this round: 0.9.0 released as stable `v0.9.0`; 1.0.0 version advance +
-  canonical reseal (bundle `434fd20fff89…`); source gates PASS on exact HEAD;
+  canonical reseal (bundle `14371ba7d078…`); source gates PASS on exact HEAD;
   five-mode; upgrade; deterministic A/B; bootstrap; checksum; CI minimal
   permissions; i18n PR fail-closed; Xray release-gate umbrella; main Rulesets
   (Rill `source`; Xray `release-gate` + `integration`).

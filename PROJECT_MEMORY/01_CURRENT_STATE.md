@@ -9,10 +9,10 @@ exact HEAD (Docker scope). The stable 1.0 **tag** is gated on the EXTERNAL P0
 ## Frozen 1.0 production identity (canonical)
 - Rill canonical production commit (Xray `RILL_CANONICAL_COMMIT` pin; reseals
   the 1.0 bundle after the version advance).
-- Bundle sha256 `434fd20fff899f363c70185932528f2be9acb88f6bf8a83d5d958522324d3b1f`.
+- Bundle sha256 `14371ba7d078e849f5dd3648624da05c8e9e23c599edaf834af73463d8dfb9ac`.
 - VERSION `1.0.0` (single version source). `candidate`/`candidateVersion`/
   `__version__` all `1.0.0`.
-- Xray pinned to the reseal commit, bundle `434fd20fff89…`, bootstrap
+- Xray pinned to the reseal commit, bundle `14371ba7d078…`, bootstrap
   EXPECTED_SHA256 == bundle sha. Cross-repo verify drift-free (9 required paths).
 
 ## Core capabilities (stable assets, not to be broken)

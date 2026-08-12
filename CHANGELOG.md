@@ -1,11 +1,12 @@
 # Changelog
 
-## 1.0.0 (2026-08-12) — stable release
+## 1.0.0 (2026-08-12) — prepared stable release
 
-First stable release. Re-sealed canonical production identity for 1.0.0
-(bundle `434fd20fff89`). All release gates pass on exact HEAD (Docker
+First stable release line. Re-sealed canonical production identity for 1.0.0
+(bundle `14371ba7d078`). All release gates pass on exact HEAD (Docker
 systemd-PID1 scope). Version identity 1.0.0 everywhere; cross-repo
-drift-free. See RELEASE_NOTES.md and docs/RELEASE_GATES.md.
+drift-free. Stable tag gated on the EXTERNAL P0 prompt purge. See
+RELEASE_NOTES.md and docs/RELEASE_GATES.md.
 
 ## 0.9.0 (2026-08-12) — stable release
 
