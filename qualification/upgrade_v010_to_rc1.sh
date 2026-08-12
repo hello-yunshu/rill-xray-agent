@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# RC upgrade qualification: v0.1.0 (real released artifact tree) -> 0.9.0-rc.1
+# Upgrade qualification: v0.1.0 (real released artifact tree) -> target release
+# (rc.1 / rc.2 / 0.9.0). The target version is read from <target-tree>/VERSION.
 #
 # Usage (inside a fresh systemd-PID1 container):
-#   upgrade_v010_to_rc1.sh <v0.1.0-tree> <rc-tree>
+#   upgrade_v010_to_rc1.sh <v0.1.0-tree> <target-tree>
 # <v0.1.0-tree> = the frozen v0.1.0 release tree (VERSION == 0.1.0)
-# <rc-tree>     = the frozen RC tree under test (VERSION == 0.9.0-rc.1)
+# <target-tree> = the frozen release tree under test (VERSION == target)
 #
-# Covers: fresh v0.1.0 install -> real state/config -> RC upgrade -> config
-# preservation + state migration -> RC timeline continues writing -> rollback
+# Covers: fresh v0.1.0 install -> real state/config -> upgrade -> config
+# preservation + state migration -> timeline continues writing -> rollback
 # to v0.1.0. All qualification is Docker-only.
 set -uo pipefail
 
@@ -28,7 +29,7 @@ check() {
 V010=$1
 RC=$2
 
-echo "=== upgrade suite: v0.1.0 -> 0.9.0-rc.1 ==="
+echo "=== upgrade suite: v0.1.0 -> $(cat "$RC/VERSION") ==="
 echo "--- identity: v0.1.0 tree ---"
 cat "$V010/VERSION"
 grep -m1 EXPECTED_SHA256 "$V010/integrations/xray_bash_onekey/repository_files/scripts/rill_xray_agent_bootstrap.sh"
@@ -90,7 +91,10 @@ check "mode defaults unchanged (observe-only)" test "$(rxa_get mode)" = "observe
 check "routeAssist unchanged (false)" test "$(rxa_get routeAssistEnabled)" = "false"
 check "boundedAuto unchanged (false)" test "$(rxa_get boundedAutoAllowed)" = "false"
 check "execution gate canApply=false" bash -c '/opt/rill-xray-agent/bin/rill-xray-agent --json diagnose 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); assert not d.get(\"canApply\", False), d"'
-check "runtime version is RC" python3 -c 'import sys; sys.path.insert(0,"/opt/rill-xray-agent/python"); import rill_xray_agent as m; assert m.__version__ == "0.9.0-rc.1", m.__version__'
+# Derive the target version from the tree under test (single source) so the
+# same harness serves rc.1/rc.2/0.9.0 without hardcoding a version string.
+TARGET_VERSION=$(cat "$RC/VERSION")
+check "runtime version is target ($TARGET_VERSION)" python3 -c 'import sys; sys.path.insert(0,"/opt/rill-xray-agent/python"); import rill_xray_agent as m; assert m.__version__ == "'"$TARGET_VERSION"'", m.__version__'
 check "RC unit files replaced (runtime unit newer than config)" test "/etc/systemd/system/rill-xray-agent-runtime.service" -nt "/etc/rill-xray-agent/config.json"
 check "old v0.1.0 observation still readable" test -f /var/lib/rill-xray-agent-xray/status/xray-observation.json
 check "old v0.1.0 observation survives upgrade (valid json)" python3 -c '

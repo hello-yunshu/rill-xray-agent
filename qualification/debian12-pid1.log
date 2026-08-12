@@ -73,8 +73,8 @@
 [PASS] intent JSON parseable + phase=prepared
 [PASS] no agent removal before committed
 === uninstall abort keeps host failure + persists aborted ===
-Rill Agent: host uninstall failed; agent diagnostics retained
 [PASS] abort returns nonzero with host rc
+Rill Agent: host uninstall failed; agent diagnostics retained
 [PASS] abort marker persisted
 === uninstall commit durability: committed durable BEFORE purge ===
 [PASS] commit returns zero (purge runs)
