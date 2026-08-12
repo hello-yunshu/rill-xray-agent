@@ -7,7 +7,7 @@
 - Rill Source Gates PASS on exact HEAD; Xray Rill Xray Agent + Test Install
   (incl. release-gate umbrella) PASS on exact HEAD
 - Docker qualification (Docker-only scope; not real host), fresh systemd-PID1
-  containers on the frozen 1.0.0 canonical identity (bundle `434fd20fff89`):
+  containers on the frozen 1.0.0 canonical identity (bundle `14371ba7d078`):
   - Debian 12 systemd PID1 suite — full critical
   - Ubuntu 24.04 systemd PID1 suite — full critical
   - five-mode matrix (xtls_only, ws_grpc_xhttp, reality, reality_nginx, tls)
