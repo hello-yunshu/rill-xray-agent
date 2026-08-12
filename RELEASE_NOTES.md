@@ -1,8 +1,6 @@
-# Rill Xray Agent 0.9.0-rc.1 Release Notes (prerelease)
+# Rill Xray Agent 1.0.0 Release Notes
 
-This is a **release candidate** (`prerelease=true`). It is feature-complete and
-fully qualified in the Docker systemd-PID1 scope, but it is not a stable
-release yet. Do not treat it as `0.9.0` or `1.0.0`.
+The 1.0.0 stable version. Fully qualified in the Docker systemd-PID1 scope.
 
 ## What this is
 
@@ -37,7 +35,7 @@ mode management, safe reinstall, rollback and uninstall.
 ## Artifacts
 
 - source/package archive
-- Xray bundle (`0f3fed6339255e8fa7d3b8c40b80fc51f264332f60dd95b2589e7d4c64507259`)
+- Xray bundle (`434fd20fff899f363c70185932528f2be9acb88f6bf8a83d5d958522324d3b1f`)
 - SHA256SUMS
 - Qualification summary
 
