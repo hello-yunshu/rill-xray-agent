@@ -1,16 +1,15 @@
 # Roadmap
 
-1. Create the project repository.
-2. Apply the Xray integration on a clean branch.
-3. Complete CI and real-host qualification.
-4. Generate v0.1.0-rc.1.
-5. Promote to stable only after an independent release audit.
-6. **0.1.0 Stable Baseline** (merged, tagged, released).
-7. **0.2 Operational Intelligence** (in development, `feat/0.2-operational-intelligence`).
-8. **Safe Event Timeline** (bounded, crash-safe, meaningful state-change events).
-9. **Doctor v1** (deterministic, explainable, advisory-only).
-10. **Explanation + Recommendations** (facts vs inference, coarse confidence).
-11. **Structured Feedback** (enum/boolean/scalar only; no free-text).
-12. **0.2 RC qualification** (full source gates + Xray required CI; targeted
-    Debian/Ubuntu PID1 Docker; deep 20/20 + five-mode + deterministic deferred
-    to 0.2 RC).
+1. **0.1.0 Stable Baseline** (`v0.1.0`, released and frozen).
+2. **0.9.0-rc.1** (feature freeze) → **0.9.0** stable (`v0.9.0`, released).
+3. **1.0.0 convergence** (`release/1.0-convergence`): all code, artifacts,
+   qualification, and CI complete; canonical resealed (bundle 434fd20fff89…),
+   cross-repo Xray sync drift-free.
+4. **1.0.0 stable tag**: GATED on EXTERNAL P0 — the historical orphan prompt
+   blob `00_总执行提示词.md` @ `52d7632d` must be purged (GitHub Support) before
+   the stable `v1.0.0` tag is created. Until then PR #4/#59 stay Draft.
+5. **Real-host (non-Docker) qualification**: NOT RUN (Docker-only policy) —
+   known limitation, not a Stable blocker.
+6. **0.2 Operational Intelligence**: not needed for 1.0; superseded by the
+   1.0 release line. Safe Timeline / Doctor v1 / structured feedback are all
+   shipped in 1.0.
