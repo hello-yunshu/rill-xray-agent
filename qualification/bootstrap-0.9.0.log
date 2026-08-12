@@ -1,0 +1,28 @@
+=== bootstrap delivery: 0.9.0 (real Xray bootstrap + bundle asset) ===
+--- identity ---
+bootstrap file: rill_xray_agent_bootstrap.sh
+bootstrap EXPECTED_SHA256: 1ec9166826d968492e4229df35ac580fa8599e183d69c76a9b7c59bfd8002ff9
+bundle sha256: 1ec9166826d968492e4229df35ac580fa8599e183d69c76a9b7c59bfd8002ff9
+
+=== run 1: fresh bootstrap+install (real paths, no DESTDIR) ===
+Created symlink /etc/systemd/system/multi-user.target.wants/rill-xray-agent-runtime.service → /etc/systemd/system/rill-xray-agent-runtime.service.
+Rill Xray Agent installed; mode=observe-only; Route Assist remains OFF
+bootstrap+installer exit 0
+
+--- installed default config invariants ---
+  mode=observe-only (want observe-only)
+  routeAssistEnabled=False (want False)
+  boundedAutoAllowed=False (want False)
+  localOnly=True (want True)
+  candidate=0.9.0 (want 0.9.0)
+default config invariants PASS (candidate 0.9.0)
+
+--- installed systemd units ---
+[PASS] runtime unit present
+[PASS] agent unit present
+
+=== run 2: repeat bootstrap (must remain idempotent) ===
+Rill Xray Agent installed; mode=observe-only; Route Assist remains OFF
+repeat bootstrap exit 0 (idempotent)
+
+=== BOOTSTRAP DELIVERY 0.9.0: PASS ===

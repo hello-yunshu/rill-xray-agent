@@ -1,4 +1,5 @@
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -7,7 +8,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class Tests(unittest.TestCase):
     def test_identity(self):
-        self.assertEqual((ROOT / "VERSION").read_text().strip(), "0.2.0-alpha.1")
+        # Derive the expected version from the single version source
+        # (python/rill_xray_agent/__init__.py::__version__) so the identity
+        # check never drifts from the real package version.
+        init = (ROOT / "python/rill_xray_agent/__init__.py").read_text()
+        m = re.search(r'^__version__\s*=\s*"([^"]+)"', init, re.M)
+        self.assertIsNotNone(m, "missing __version__ in __init__.py")
+        self.assertEqual((ROOT / "VERSION").read_text().strip(), m.group(1))
         self.assertTrue((ROOT / "bin/rill-xray-agent").is_file())
         self.assertTrue((ROOT / "python/rill_xray_agent/runtime_service.py").is_file())
 
