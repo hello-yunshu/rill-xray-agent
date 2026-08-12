@@ -23,6 +23,53 @@ SRC=${SRC:-/src}
 # read-only and becomes the installed /etc/rill-xray-agent on install. The
 # installed copies are byte-identical (canonical), so sourcing from /src works
 # on a FRESH container before install has run.
+
+# ---------------------------------------------------------------------------
+# Qualification provenance metadata (independent, auditable header).
+# Emitted FIRST so a log proves its runtime environment + exact subject.
+# These are evidence metadata only; they are NOT part of the deterministic
+# production subject identity (subjectId is computed without executedAt).
+# ---------------------------------------------------------------------------
+emit_metadata() {
+    local repo="${REPO_NAME:-rill-xray-agent}"
+    local vy="${VERSION:-1.0.0}"
+    local rill_src="${RILL_SOURCE_COMMIT:-97d3c14540318268d0275d33a5649e58ff8f4c50}"
+    local rill_canon="${RILL_CANONICAL_COMMIT:-97d3c14540318268d0275d33a5649e58ff8f4c50}"
+    local xray="${XRAY_COMMIT:-2ab36c00f274f4fbe92a1c22d4d26122046d859d}"
+    local bundle="${BUNDLE_SHA256:-14371ba7d078e849f5dd3648624da05c8e9e23c599edaf834af73463d8dfb9ac}"
+    local subj="${SUBJECT_ID:-16b3e43d0fd99162ca62a95a3bb509350c11b45869ab552e7da3ac10784c06fa}"
+    local img="${CONTAINER_IMAGE:-$repo-docker}"
+    local harness="${HARNESS_SHA256:-$( (sha256sum "$0" 2>/dev/null || shasum -a 256 "$0" 2>/dev/null) | awk '{print $1}')}"
+    local pid1="$(ps -p 1 -o comm= 2>/dev/null)"
+    local sysd="$(systemctl --version 2>/dev/null | head -1)"
+    echo "QUALIFICATION_METADATA_BEGIN"
+    echo "repository=$repo"
+    echo "version=$vy"
+    echo "rillSourceCommit=$rill_src"
+    echo "rillCanonicalCommit=$rill_canon"
+    echo "xrayCommit=$xray"
+    echo "bundleSha256=$bundle"
+    echo "qualificationSubjectId=$subj"
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        echo "osId=${ID:-}"
+        echo "osVersion=${VERSION_ID:-}"
+        echo "osPrettyName=${PRETTY_NAME:-}"
+    else
+        echo "osId=unknown"
+        echo "osVersion=unknown"
+        echo "osPrettyName=unknown"
+    fi
+    echo "containerRuntime=docker"
+    echo "containerImage=$img"
+    echo "pid1=$pid1"
+    echo "systemdVersion=${sysd:-}"
+    echo "harnessSha256=$harness"
+    echo "executedAtUTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "QUALIFICATION_METADATA_END"
+}
+emit_metadata
+
 Manager="$SRC/scripts/rill_xray_agent_manager.sh"
 UninstallScript="$SRC/scripts/rill_xray_agent_uninstall.sh"
 RUNTIME_SOCK=/run/rill-xray-agent/runtime.sock
@@ -72,8 +119,8 @@ uninstall_commit() { rxa_uninstall_commit; }
 echo "=== PID1 suite ==="
 check "PID1 is systemd" bash -c '[[ "$(ps -p 1 -o comm=)" == "systemd" ]]'
 
-echo "--- identity: canonical payload EXPECTED_SHA256 == 434fd20f ---"
-check "source bundle EXPECTED_SHA256 == 434fd20f" bash -c "grep -q 'EXPECTED_SHA256=434fd20fff899f363c70185932528f2be9acb88f6bf8a83d5d958522324d3b1f' '$SRC/scripts/rill_xray_agent_bootstrap.sh'"
+echo "--- identity: canonical payload EXPECTED_SHA256 == 14371ba7 ---"
+check "source bundle EXPECTED_SHA256 == 14371ba7" bash -c "grep -q 'EXPECTED_SHA256=14371ba7d078e849f5dd3648624da05c8e9e23c599edaf834af73463d8dfb9ac' '$SRC/scripts/rill_xray_agent_bootstrap.sh'"
 
 echo "=== phase 0: fresh install from canonical payload ==="
 check "unit absent before install" bash -c '! [[ -e /etc/systemd/system/rill-xray-agent-runtime.service ]]'
