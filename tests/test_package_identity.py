@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class Tests(unittest.TestCase):
     def test_identity(self):
-        self.assertEqual((ROOT / "VERSION").read_text().strip(), "0.2.0-alpha.1")
+        self.assertEqual((ROOT / "VERSION").read_text().strip(), "0.9.0-rc.1")
         self.assertTrue((ROOT / "bin/rill-xray-agent").is_file())
         self.assertTrue((ROOT / "python/rill_xray_agent/runtime_service.py").is_file())
 
