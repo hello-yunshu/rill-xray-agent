@@ -1,0 +1,53 @@
+=== upgrade suite: v0.1.0 -> 1.0.0 ===
+--- identity: v0.1.0 tree ---
+0.1.0
+EXPECTED_SHA256=7a6076b3d458131c882a1547feca4f13c4c383113f858ed9e25ad3d77e2fc79e
+--- identity: RC tree ---
+1.0.0
+EXPECTED_SHA256=434fd20fff899f363c70185932528f2be9acb88f6bf8a83d5d958522324d3b1f
+=== phase 1: install v0.1.0 from frozen tag tree ===
+[PASS] v0.1.0 unit absent before install
+Created symlink /etc/systemd/system/multi-user.target.wants/rill-xray-agent-runtime.service → /etc/systemd/system/rill-xray-agent-runtime.service.
+Rill Xray Agent installed; mode=observe-only; Route Assist remains OFF
+[PASS] v0.1.0 install rc=0
+[PASS] v0.1.0 runtime unit active
+[PASS] v0.1.0 agent unit active
+[PASS] v0.1.0 observe path active
+=== phase 2: generate real v0.1.0 state/config ===
+[PASS] v0.1.0 mode observe-only
+[PASS] v0.1.0 observation file exists
+[PASS] v0.1.0 observation is valid json
+[PASS] v0.1.0 CLI status works
+[PASS] v0.1.0 CLI snapshot works
+[PASS] v0.1.0 CLI has NO timeline subcommand (pre-OI identity)
+=== phase 3: upgrade to 0.9.0-rc.1 (frozen RC tree) ===
+Rill Xray Agent installed; mode=observe-only; Route Assist remains OFF
+[PASS] RC upgrade install rc=0
+[PASS] RC runtime unit active after upgrade
+[PASS] RC agent unit active after upgrade
+=== phase 4: verify preservation + migration ===
+[PASS] user config maximumConcurrentConnections preserved
+[PASS] user config userLevelStatistics preserved
+[PASS] mode defaults unchanged (observe-only)
+[PASS] routeAssist unchanged (false)
+[PASS] boundedAuto unchanged (false)
+[PASS] execution gate canApply=false
+[PASS] runtime version is target (1.0.0)
+[PASS] RC unit files replaced (runtime unit newer than config)
+[PASS] old v0.1.0 observation still readable
+[PASS] old v0.1.0 observation survives upgrade (valid json)
+=== phase 5: RC timeline fresh + continues writing ===
+[PASS] timeline meta created after a meaningful change (fresh journal by RC)
+[PASS] timeline records the observed change
+[PASS] RC timeline CLI works
+[PASS] RC diagnose CLI works
+[PASS] observation still valid after upgrade
+=== phase 6: rollback to v0.1.0 (downgrade path) ===
+[PASS] rollback install rc=0
+[PASS] runtime unit active after rollback
+[PASS] agent unit active after rollback
+[PASS] user config preserved through rollback
+[PASS] runtime version back to v0.1.0
+=== totals ===
+upgrade suite: 34 PASS, 0 FAIL
+UPGRADE QUALIFICATION PASS
