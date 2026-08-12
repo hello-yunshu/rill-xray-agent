@@ -1,8 +1,8 @@
-# Rill Xray Agent 0.9.0-rc.1 Release Notes (prerelease)
+# Rill Xray Agent 1.0.0 Release Notes
 
-This is a **release candidate** (`prerelease=true`). It is feature-complete and
-fully qualified in the Docker systemd-PID1 scope, but it is not a stable
-release yet. Do not treat it as `0.9.0` or `1.0.0`.
+1.0.0 prepared stable release. Code is fully qualified in the Docker
+systemd-PID1 scope; the stable Git tag is blocked by an external governance
+P0 (historical public prompt blob pending GitHub Support purge).
 
 ## What this is
 
@@ -37,7 +37,7 @@ mode management, safe reinstall, rollback and uninstall.
 ## Artifacts
 
 - source/package archive
-- Xray bundle (`0f3fed6339255e8fa7d3b8c40b80fc51f264332f60dd95b2589e7d4c64507259`)
+- Xray bundle (`14371ba7d078e849f5dd3648624da05c8e9e23c599edaf834af73463d8dfb9ac`)
 - SHA256SUMS
 - Qualification summary
 
@@ -45,5 +45,5 @@ mode management, safe reinstall, rollback and uninstall.
 
 - Real-host qualification not run (see above).
 - A historical public prompt blob remains fetchable (external P0; GitHub
-  Support purge required). This is a governance item for the 1.0 stable tag
-  and does not affect this prerelease's functionality.
+  Support purge required). This is a governance item that blocks the 1.0
+  stable tag and does not affect the qualified release bytes' functionality.
