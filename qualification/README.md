@@ -1,64 +1,72 @@
-# 2026-08-10 v0.1.0 stable release qualification (subject v2)
+# 2026-08-12 1.0.0 frozen production qualification (subject v2)
 
-Qualification of the frozen v0.1.0 production subject; the Rill commit
-recorded here is the canonical payload commit the Xray workflow pin points
-at, NOT a running docs HEAD. All production logs in this directory
-(round-01..20, five-mode-*, pid1, bootstrap-delivery) were produced on fresh
-containers against the frozen tree. All qualification is Docker-only.
+Qualification of the frozen 1.0.0 production subject; the Rill commit recorded
+here is the canonical payload commit the Xray workflow pin points at, NOT a
+running docs HEAD. All production logs in this directory
+(`debian12-pid1-1.0.0.log`, `ubuntu2404-pid1-1.0.0.log`, `bootstrap-1.0.0.log`,
+`upgrade-v010-1.0.0.log`, `deterministic-A/B.sha256`) were produced on fresh
+systemd-PID1 containers against the frozen 1.0.0 tree. All qualification is
+Docker-only.
 
 ## Frozen heads (executedAt metadata; not part of the subjectId)
-- Rill canonical payload commit `8fadd208ae08de3dcd0d724daf3d90a39dfdd861`
-  (branch then advances with evidence/memory commits — subject unchanged)
-- Xray delivery HEAD `291d1ebba205082e8bb58717b0167e636a3e82f3`
-- Xray workflow pin: `RILL_CANONICAL_COMMIT: 8fadd208…` (does not chase docs HEAD)
+- Rill qualified canonical commit `97d3c14540318268d0275d33a5649e58ff8f4c50`
+  (the 1.0.0 reseal commit after the upgrade bytecode purge fix; Xray
+  `RILL_CANONICAL_COMMIT` pin)
+- Xray qualified delivery HEAD `2ab36c00f274f4fbe92a1c22d4d26122046d859d`
+- Xray workflow pin: `RILL_CANONICAL_COMMIT: 97d3c145…` (does not chase docs HEAD)
 
 ## Qualification subject (schemaVersion 2, fully reproducible)
 `qualification/QUALIFICATION_SUBJECT.json` is generated deterministically by
 `scripts/build_qualification_subject.py` (`--write` with
 `--rill-commit --xray-commit`, or `--check`):
 
-- subjectId `0cad2a9662bf4a06bd31eea51dee72c5c9fba6174910154a5690d009c8806b5f`
+- subjectId `16b3e43d0fd99162ca62a95a3bb509350c11b45869ab552e7da3ac10784c06fa`
   (sha256 of the canonically-serialized subject minus subjectId AND
   minus executedAt, so evidence-only commits do not mint new subjects)
-- production tree `bb964bb8e29b474d…`
+- production tree `b1b4f59c86025f3df0252dbcf3364ded3dd64610008ddf611a985c6d50c1fab9`
   (computed by the committed generator over VERSION, bin/, config/, python/,
   schemas/, systemd/ — supported Portable Python surface only; Native Rust
   crates/Cargo.toml excluded, nativeRuntimeSupported=false)
-- harness `rillHarnessSha256 0f750743680c…` / `xrayHarnessSha256 2771479f7d…` /
-  `qualificationHarnessSha256 a0cebe7eed…`
+- harness `rillHarnessSha256 793adf48c2…` / `xrayHarnessSha256 483eb97962…` /
+  `qualificationHarnessSha256 4a8c749e9b…`
   (explicit committed file sets, documented deterministic fileset digest)
-- bundle `7a6076b3d458131c882a1547feca4f13c4c383113f858ed9e25ad3d77e2fc79e`
-- canonical manifest `85ebb7ba440ea36427e40c0598fd88d0d1ee80a982e6b7618d31a5ec994d6318`
-- Xray install.sh `180eca3fc4b1…`, payload tree `cebea370876e…`,
-  systemd tree `70ec8a44cda3…`, bootstrap `bf597f35bea4…`
+- bundle `14371ba7d078e849f5dd3648624da05c8e9e23c599edaf834af73463d8dfb9ac`
+- canonical manifest `33c4c5006917a0…`
+- Xray install.sh `6b77db9d210d…`, payload tree `3a76c1b0609e…`,
+  systemd tree `d3e494821459…`, bootstrap `404d6f3d8e67…`
   (EXPECTED_SHA256 == bundleAssetSha256), bundle asset
-  `7a6076b3d458…` (== canonical bundle), delivery tree `8f0f22dbfc07…`
+  `14371ba7d078…` (== canonical bundle), delivery tree `b2a747be33cd…`
 
-## Production qualification (all on frozen subject, fresh containers)
-- Full source gates: PASS
-- Fresh 20/20 (RILL_GATE_ORDER_SEED=1..20, fresh container each): 20/20 PASS
-- Debian 12 systemd PID1 raw log: 66/66 PASS
-- Ubuntu 24.04 systemd PID1 raw log: 66/66 PASS
+## Production qualification (all on frozen 1.0.0 subject, fresh containers)
+- Full source gates: PASS (exact PR HEAD)
+- Debian 12 systemd PID1 full critical: 67/67 PASS
+- Ubuntu 24.04 systemd PID1 full critical: 67/67 PASS
 - Five-mode matrix (fresh container per mode): `xtls_only /
-  ws_grpc_xhttp / reality / reality_nginx / tls` — all PASS (34 checks each;
-  reality re-run on a fresh container after a transient host-network apt
-  failure during the Xray install stage — the Rill agent stage passed in
-  both runs)
+  ws_grpc_xhttp / reality / reality_nginx / tls` — all PASS (34 checks each)
 - Deterministic build A/B: A==B byte-identical
   (deterministic-A.sha256 vs deterministic-B.sha256)
-- Bootstrap delivery (current Xray v0.1 bootstrap `bf597f35…` consuming the
-  current bundled asset `7a6076b3d…`): PASS — installer exit 0, version
-  0.1.0 identity, default config safe, EXPECTED_SHA256 == bundle sha
+- Bootstrap delivery (Xray bootstrap -> bundled asset): PASS, idempotent
+- Upgrade v0.1.0 -> 1.0.0 -> rollback v0.1.0: PASS
+  (config + state preserved, timeline continues, target version 1.0.0,
+  routeAssist false, boundedAuto false, canApply false, rollback works)
+- package / checksum verification: PASS
 
 Scope note: Docker-only. None of these logs claim bare-metal coverage.
 
 ## Real-host
 `REAL HOST = NOT RUN`. No VPS/VM was spun up; Docker PID1 is not real-host.
 
-## Logs
-- `round-01..20.log` — fresh 20/20 (v0.1.0)
-- `five-mode-*.log` — five mode install+lifecycle (v0.1.0)
-- `debian12-pid1.log`, `ubuntu2404-pid1.log` — PID1 raw logs (v0.1.0)
+## Historical evidence (superseded, retained for provenance)
+- `round-01..20.log`, `five-mode-*.log` (older 20/20 + five-mode runs), Milestone
+  `debian12-pid1.log`, `ubuntu2404-pid1.log`, `bootstrap-delivery.log`,
+  `upgrade-v010-rc1.log`, `upgrade-v010-0.9.0.log`, `debian12-oi*.log`,
+  `ubuntu2404-oi*.log` — these reference older subjects (v0.1.0 / 0.9.0 / RC)
+  and are NOT the current 1.0.0 production subject. They are retained as
+  historical evidence only.
+
+## Logs (current 1.0.0 subject)
+- `debian12-pid1-1.0.0.log`, `ubuntu2404-pid1-1.0.0.log` — PID1 raw logs
+- `bootstrap-1.0.0.log` — bootstrap delivery smoke
+- `upgrade-v010-1.0.0.log` — v0.1.0 -> 1.0.0 -> rollback
 - `deterministic-A.sha256`, `deterministic-B.sha256` — deterministic A/B
-- `bootstrap-delivery.log` — bootstrap -> asset staged delivery smoke
 - `QUALIFICATION_SUBJECT.json` — subject pinned (generator-verified)

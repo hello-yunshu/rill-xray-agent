@@ -1,0 +1,48 @@
+QUALIFICATION_METADATA_BEGIN
+repository=rill-xray-agent
+version=1.0.0
+rillSourceCommit=97d3c14540318268d0275d33a5649e58ff8f4c50
+rillCanonicalCommit=97d3c14540318268d0275d33a5649e58ff8f4c50
+xrayCommit=2ab36c00f274f4fbe92a1c22d4d26122046d859d
+bundleSha256=14371ba7d078e849f5dd3648624da05c8e9e23c599edaf834af73463d8dfb9ac
+qualificationSubjectId=16b3e43d0fd99162ca62a95a3bb509350c11b45869ab552e7da3ac10784c06fa
+osId=debian
+osVersion=12
+osPrettyName=Debian GNU/Linux 12 (bookworm)
+containerRuntime=docker
+containerImage=rill-xray-agent-docker
+pid1=systemd
+systemdVersion=systemd 252 (252.39-1~deb12u2)
+harnessSha256=a6046aee5d06bafe448d30eec4e7ac42d5ee37577e8c6634ab848ccb5fd20f66
+executedAtUTC=2026-08-12T18:13:44Z
+QUALIFICATION_METADATA_END
+=== bootstrap delivery: 1.0.0 (real Xray bootstrap + bundle asset) ===
+--- identity ---
+bootstrap file: rill_xray_agent_bootstrap.sh
+bootstrap EXPECTED_SHA256: 14371ba7d078e849f5dd3648624da05c8e9e23c599edaf834af73463d8dfb9ac
+bundle sha256: 14371ba7d078e849f5dd3648624da05c8e9e23c599edaf834af73463d8dfb9ac
+[PASS] bootstrap EXPECTED_SHA256 == 14371ba7
+[PASS] bundle sha == 14371ba7
+=== run 1: fresh bootstrap+install (real paths, no DESTDIR) ===
+[PASS] unit absent before bootstrap
+Created symlink /etc/systemd/system/multi-user.target.wants/rill-xray-agent-runtime.service → /etc/systemd/system/rill-xray-agent-runtime.service.
+Rill Xray Agent installed; mode=observe-only; Route Assist remains OFF
+[PASS] bootstrap+installer exit 0
+--- installed default config invariants ---
+[PASS] mode=observe-only
+[PASS] routeAssistEnabled=False
+[PASS] boundedAutoAllowed=False
+[PASS] localOnly=True
+[PASS] candidate=1.0.0
+--- installed systemd units ---
+[PASS] runtime unit present
+[PASS] agent unit present
+[PASS] runtime unit active
+[PASS] agent unit active
+=== run 2: repeat bootstrap (must remain idempotent) ===
+[PASS] repeat bootstrap exit 0 (idempotent)
+[PASS] runtime unit still active after repeat
+[PASS] config candidate still 1.0.0 after repeat
+=== totals ===
+bootstrap suite: 16 PASS, 0 FAIL
+BOOTSTRAP DELIVERY 1.0.0: PASS

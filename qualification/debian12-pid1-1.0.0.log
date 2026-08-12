@@ -1,0 +1,111 @@
+QUALIFICATION_METADATA_BEGIN
+repository=rill-xray-agent
+version=1.0.0
+rillSourceCommit=97d3c14540318268d0275d33a5649e58ff8f4c50
+rillCanonicalCommit=97d3c14540318268d0275d33a5649e58ff8f4c50
+xrayCommit=2ab36c00f274f4fbe92a1c22d4d26122046d859d
+bundleSha256=14371ba7d078e849f5dd3648624da05c8e9e23c599edaf834af73463d8dfb9ac
+qualificationSubjectId=16b3e43d0fd99162ca62a95a3bb509350c11b45869ab552e7da3ac10784c06fa
+osId=debian
+osVersion=12
+osPrettyName=Debian GNU/Linux 12 (bookworm)
+containerRuntime=docker
+containerImage=rill-xray-agent-docker
+pid1=systemd
+systemdVersion=systemd 252 (252.39-1~deb12u2)
+harnessSha256=0b6c49ce7b1d3e568819feacc7a088503adedb82014ac40e9b1dcd3ad1215a7d
+executedAtUTC=2026-08-12T18:13:03Z
+QUALIFICATION_METADATA_END
+=== PID1 suite ===
+[PASS] PID1 is systemd
+--- identity: canonical payload EXPECTED_SHA256 == 14371ba7 ---
+[PASS] source bundle EXPECTED_SHA256 == 14371ba7
+=== phase 0: fresh install from canonical payload ===
+[PASS] unit absent before install
+Created symlink /etc/systemd/system/multi-user.target.wants/rill-xray-agent-runtime.service → /etc/systemd/system/rill-xray-agent-runtime.service.
+Rill Xray Agent installed; mode=observe-only; Route Assist remains OFF
+[PASS] install rc=0
+=== static install sanity ===
+[PASS] manager present
+[PASS] config present
+[PASS] runtime binary present
+[PASS] agent binary present
+[PASS] runtime unit present
+[PASS] agent unit present
+[PASS] config defaults routeAssist=false
+[PASS] config defaults boundedAuto=false
+[PASS] config defaults candidate=1.0.0
+[PASS] config defaults localOnly=true
+[PASS] config mode=observe-only
+[PASS] installed version == 1.0.0
+=== fresh observe-only ===
+[PASS] runtime unit active
+[PASS] agent unit active
+[PASS] observe path active
+[PASS] runtime.sock connects (real connect)
+[PASS] agent.sock connects (real connect)
+=== RuntimeDirectory retention while observe-only ===
+[PASS] /run/rill-xray-agent exists
+=== observation freshness (fresh observe holds valid JSON) ===
+[PASS] observe refresh runs
+[PASS] observe valid (structure+fresh)
+=== switch safe-disabled ===
+[PASS] apply safe-disabled
+[PASS] config mode=safe-disabled
+[PASS] runtime unit still active
+[PASS] agent unit inactive
+[PASS] observe path inactive
+[PASS] routeAssist stays false in runtime
+[PASS] boundedAuto stays false in runtime
+--- safe-disabled socket semantics ---
+[PASS] runtime.sock still connects
+=== RuntimeDirectory retention while safe-disabled ===
+[PASS] /run/rill-xray-agent still exists
+=== switch back observe-only ===
+[PASS] apply observe-only
+[PASS] config mode=observe-only
+[PASS] agent unit active again
+[PASS] runtime.sock connects again
+[PASS] agent.sock connects again
+=== switch normal ===
+[PASS] apply normal
+[PASS] config mode=normal
+[PASS] agent unit active in normal
+[PASS] runtime.sock connects in normal
+[PASS] agent.sock connects in normal
+=== switch safe-disabled again ===
+[PASS] apply safe-disabled (2)
+[PASS] config mode=safe-disabled (2)
+[PASS] agent unit inactive (2)
+=== switch observe-only again ===
+[PASS] apply observe-only (2)
+[PASS] config mode=observe-only (2)
+=== formal verify ===
+[PASS] runtime answers config
+[PASS] diagnose canApply=false
+[PASS] verify.sh runtime path exits 0
+=== agent restart recovery while observe-only ===
+[PASS] agent unit active after restart
+[PASS] agent.sock connects after restart
+[PASS] runtime.sock connects after restart
+=== observation freshness after restart ===
+[PASS] observation valid after restart
+=== agent restart recovery assert socket is listening (true reconnect) ===
+[PASS] agent.sock still accepted (post-restart)
+=== uninstall intent: prepared persisted before host removal ===
+[PASS] prepare writes intent
+[PASS] intent file exists
+[PASS] intent JSON parseable + phase=prepared
+[PASS] no agent removal before committed
+=== uninstall abort keeps host failure + persists aborted ===
+[PASS] abort returns nonzero with host rc
+[PASS] abort marker persisted
+[PASS] runtime still active after abort
+=== uninstall commit (host purge) ===
+[PASS] commit returns zero (purge runs)
+[PASS] runtime unit removed by purge
+[PASS] no agent unit remains
+[PASS] opt rill payload removed
+=== totals ===
+PID1 suite: r=67 PASS, r=0 FAIL
+PID1 SUITE ALL PASS
