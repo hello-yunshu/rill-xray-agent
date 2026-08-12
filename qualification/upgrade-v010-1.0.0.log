@@ -1,10 +1,28 @@
-=== upgrade suite: v0.1.0 -> 1.0.0 ===
---- identity: v0.1.0 tree ---
+QUALIFICATION_METADATA_BEGIN
+repository=rill-xray-agent
+version=1.0.0
+rillSourceCommit=97d3c14540318268d0275d33a5649e58ff8f4c50
+rillCanonicalCommit=97d3c14540318268d0275d33a5649e58ff8f4c50
+xrayCommit=2ab36c00f274f4fbe92a1c22d4d26122046d859d
+bundleSha256=14371ba7d078e849f5dd3648624da05c8e9e23c599edaf834af73463d8dfb9ac
+qualificationSubjectId=16b3e43d0fd99162ca62a95a3bb509350c11b45869ab552e7da3ac10784c06fa
+osId=debian
+osVersion=12
+osPrettyName=Debian GNU/Linux 12 (bookworm)
+containerRuntime=docker
+containerImage=rill-xray-agent-docker
+pid1=systemd
+systemdVersion=systemd 252 (252.39-1~deb12u2)
+harnessSha256=d933b80725c42824c1b2387485bf02a23c725314d65f3218b5f1b9635a36c75d
+executedAtUTC=2026-08-12T18:14:08Z
+QUALIFICATION_METADATA_END
+=== upgrade suite: v0.1.0 -> v1.0.0 ===
+--- identity: SOURCE tree ---
 0.1.0
 EXPECTED_SHA256=7a6076b3d458131c882a1547feca4f13c4c383113f858ed9e25ad3d77e2fc79e
---- identity: RC tree ---
+--- identity: TARGET tree ---
 1.0.0
-EXPECTED_SHA256=434fd20fff899f363c70185932528f2be9acb88f6bf8a83d5d958522324d3b1f
+EXPECTED_SHA256=14371ba7d078e849f5dd3648624da05c8e9e23c599edaf834af73463d8dfb9ac
 === phase 1: install v0.1.0 from frozen tag tree ===
 [PASS] v0.1.0 unit absent before install
 Created symlink /etc/systemd/system/multi-user.target.wants/rill-xray-agent-runtime.service → /etc/systemd/system/rill-xray-agent-runtime.service.
@@ -20,11 +38,11 @@ Rill Xray Agent installed; mode=observe-only; Route Assist remains OFF
 [PASS] v0.1.0 CLI status works
 [PASS] v0.1.0 CLI snapshot works
 [PASS] v0.1.0 CLI has NO timeline subcommand (pre-OI identity)
-=== phase 3: upgrade to 0.9.0-rc.1 (frozen RC tree) ===
+=== phase 3: upgrade to v1.0.0 (frozen TARGET tree) ===
 Rill Xray Agent installed; mode=observe-only; Route Assist remains OFF
-[PASS] RC upgrade install rc=0
-[PASS] RC runtime unit active after upgrade
-[PASS] RC agent unit active after upgrade
+[PASS] TARGET upgrade install rc=0
+[PASS] TARGET runtime unit active after upgrade
+[PASS] TARGET agent unit active after upgrade
 === phase 4: verify preservation + migration ===
 [PASS] user config maximumConcurrentConnections preserved
 [PASS] user config userLevelStatistics preserved
@@ -32,15 +50,15 @@ Rill Xray Agent installed; mode=observe-only; Route Assist remains OFF
 [PASS] routeAssist unchanged (false)
 [PASS] boundedAuto unchanged (false)
 [PASS] execution gate canApply=false
-[PASS] runtime version is target (1.0.0)
-[PASS] RC unit files replaced (runtime unit newer than config)
+[PASS] runtime version is target (v1.0.0)
+[PASS] TARGET unit files replaced (runtime unit newer than config)
 [PASS] old v0.1.0 observation still readable
 [PASS] old v0.1.0 observation survives upgrade (valid json)
-=== phase 5: RC timeline fresh + continues writing ===
-[PASS] timeline meta created after a meaningful change (fresh journal by RC)
+=== phase 5: TARGET timeline fresh + continues writing ===
+[PASS] timeline meta created after a meaningful change (fresh journal by TARGET)
 [PASS] timeline records the observed change
-[PASS] RC timeline CLI works
-[PASS] RC diagnose CLI works
+[PASS] TARGET timeline CLI works
+[PASS] TARGET diagnose CLI works
 [PASS] observation still valid after upgrade
 === phase 6: rollback to v0.1.0 (downgrade path) ===
 [PASS] rollback install rc=0

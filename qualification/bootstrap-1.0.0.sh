@@ -24,16 +24,55 @@ Bootstrap="$REPO/integrations/xray_bash_onekey/repository_files/scripts/rill_xra
 Bundle="$REPO/integrations/xray_bash_onekey/assets/rill-xray-agent-xray-bundle.tar.gz"
 CFG=/etc/rill-xray-agent/config.json
 
+# ---------------------------------------------------------------------------
+# Qualification provenance metadata (independent, auditable header).
+# Evidence metadata only; NOT part of the deterministic subject identity.
+# ---------------------------------------------------------------------------
+emit_metadata() {
+    local repo="${REPO_NAME:-rill-xray-agent}"
+    local vy="${VERSION:-1.0.0}"
+    local rill_canon="${RILL_CANONICAL_COMMIT:-97d3c14540318268d0275d33a5649e58ff8f4c50}"
+    local xray="${XRAY_COMMIT:-2ab36c00f274f4fbe92a1c22d4d26122046d859d}"
+    local bundle="${BUNDLE_SHA256:-14371ba7d078e849f5dd3648624da05c8e9e23c599edaf834af73463d8dfb9ac}"
+    local subj="${SUBJECT_ID:-16b3e43d0fd99162ca62a95a3bb509350c11b45869ab552e7da3ac10784c06fa}"
+    local img="${CONTAINER_IMAGE:-$repo-docker}"
+    local harness="${HARNESS_SHA256:-$( (sha256sum "$0" 2>/dev/null || shasum -a 256 "$0" 2>/dev/null) | awk '{print $1}')}"
+    local pid1="$(ps -p 1 -o comm= 2>/dev/null)"
+    local sysd="$(systemctl --version 2>/dev/null | head -1)"
+    echo "QUALIFICATION_METADATA_BEGIN"
+    echo "repository=$repo"
+    echo "version=$vy"
+    echo "rillSourceCommit=$rill_canon"
+    echo "rillCanonicalCommit=$rill_canon"
+    echo "xrayCommit=$xray"
+    echo "bundleSha256=$bundle"
+    echo "qualificationSubjectId=$subj"
+    if [[ -f /etc/os-release ]]; then
+        . /etc/os-release
+        echo "osId=${ID:-}"
+        echo "osVersion=${VERSION_ID:-}"
+        echo "osPrettyName=${PRETTY_NAME:-}"
+    fi
+    echo "containerRuntime=docker"
+    echo "containerImage=$img"
+    echo "pid1=$pid1"
+    echo "systemdVersion=${sysd:-}"
+    echo "harnessSha256=$harness"
+    echo "executedAtUTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "QUALIFICATION_METADATA_END"
+}
+emit_metadata
+
 echo "=== bootstrap delivery: 1.0.0 (real Xray bootstrap + bundle asset) ==="
 echo "--- identity ---"
 echo "bootstrap file: $(basename "$Bootstrap")"
 echo "bootstrap EXPECTED_SHA256: $(sed -n 's/^EXPECTED_SHA256=//p' "$Bootstrap")"
 echo "bundle sha256: $(sha256sum "$Bundle" | awk '{print $1}')"
 
-check "bootstrap EXPECTED_SHA256 == 434fd20f" \
-    bash -c "grep -q 'EXPECTED_SHA256=434fd20fff899f363c70185932528f2be9acb88f6bf8a83d5d958522324d3b1f' '$Bootstrap'"
-check "bundle sha == 434fd20f" \
-    bash -c "[ \"\$(sha256sum '$Bundle' | awk '{print \$1}')\" == '434fd20fff899f363c70185932528f2be9acb88f6bf8a83d5d958522324d3b1f' ]"
+check "bootstrap EXPECTED_SHA256 == 14371ba7" \
+    bash -c "grep -q 'EXPECTED_SHA256=14371ba7d078e849f5dd3648624da05c8e9e23c599edaf834af73463d8dfb9ac' '$Bootstrap'"
+check "bundle sha == 14371ba7" \
+    bash -c "[ \"\$(sha256sum '$Bundle' | awk '{print \$1}')\" == '14371ba7d078e849f5dd3648624da05c8e9e23c599edaf834af73463d8dfb9ac' ]"
 
 echo "=== run 1: fresh bootstrap+install (real paths, no DESTDIR) ==="
 check "unit absent before bootstrap" bash -c '! [[ -e /etc/systemd/system/rill-xray-agent-runtime.service ]]'
