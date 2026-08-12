@@ -1,4 +1,4 @@
-=== five-mode suite: mode=reality container=1c21e2027830 ===
+=== five-mode suite: mode=reality container=23bc45cea0ce ===
 --- install (reality) ---
   Testing installation mode: reality
 ============================================
@@ -34,7 +34,7 @@ Need to get 107 kB of archives.
 After this operation, 242 kB of additional disk space will be used.
 Get:1 http://deb.debian.org/debian bookworm/main arm64 bc arm64 1.07.1-3 [107 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 107 kB in 0s (214 kB/s)
+Fetched 107 kB in 8s (13.5 kB/s)
 Selecting previously unselected package bc.
 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 9138 files and directories currently installed.)
 Preparing to unpack .../archives/bc_1.07.1-3_arm64.deb ...
@@ -59,14 +59,12 @@ Need to get 726 kB of archives.
 After this operation, 1875 kB of additional disk space will be used.
 Get:1 http://deb.debian.org/debian bookworm/main arm64 libdbus-1-3 arm64 1.14.10-1~deb12u1 [193 kB]
 Get:2 http://deb.debian.org/debian bookworm/main arm64 dbus-bin arm64 1.14.10-1~deb12u1 [104 kB]
-Ign:2 http://deb.debian.org/debian bookworm/main arm64 dbus-bin arm64 1.14.10-1~deb12u1
 Get:3 http://deb.debian.org/debian bookworm/main arm64 dbus-session-bus-common all 1.14.10-1~deb12u1 [78.2 kB]
 Get:4 http://deb.debian.org/debian bookworm/main arm64 dbus-daemon arm64 1.14.10-1~deb12u1 [176 kB]
 Get:5 http://deb.debian.org/debian bookworm/main arm64 dbus-system-bus-common all 1.14.10-1~deb12u1 [79.3 kB]
 Get:6 http://deb.debian.org/debian bookworm/main arm64 dbus arm64 1.14.10-1~deb12u1 [96.2 kB]
-Get:2 http://deb.debian.org/debian bookworm/main arm64 dbus-bin arm64 1.14.10-1~deb12u1 [104 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 668 kB in 14s (49.1 kB/s)
+Fetched 726 kB in 9s (78.3 kB/s)
 Selecting previously unselected package libdbus-1-3:arm64.
 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 9156 files and directories currently installed.)
 Preparing to unpack .../0-libdbus-1-3_1.14.10-1~deb12u1_arm64.deb ...
@@ -120,11 +118,9 @@ The following NEW packages will be installed:
 Need to get 19.5 MB of archives.
 After this operation, 112 MB of additional disk space will be used.
 Get:1 http://deb.debian.org/debian bookworm/main arm64 perl-modules-5.36 all 5.36.0-7+deb12u3 [2815 kB]
-Ign:1 http://deb.debian.org/debian bookworm/main arm64 perl-modules-5.36 all 5.36.0-7+deb12u3
 Get:2 http://deb.debian.org/debian bookworm/main arm64 libgdbm6 arm64 1.23-3 [70.9 kB]
 Get:3 http://deb.debian.org/debian bookworm/main arm64 libgdbm-compat4 arm64 1.23-3 [48.0 kB]
 Get:4 http://deb.debian.org/debian bookworm/main arm64 libperl5.36 arm64 5.36.0-7+deb12u3 [4009 kB]
-Ign:4 http://deb.debian.org/debian bookworm/main arm64 libperl5.36 arm64 5.36.0-7+deb12u3
 Get:5 http://deb.debian.org/debian bookworm/main arm64 perl arm64 5.36.0-7+deb12u3 [239 kB]
 Get:6 http://deb.debian.org/debian bookworm/main arm64 less arm64 590-2.1~deb12u2 [128 kB]
 Get:7 http://deb.debian.org/debian bookworm/main arm64 netbase all 6.4 [12.8 kB]
@@ -136,27 +132,17 @@ Get:12 http://deb.debian.org/debian bookworm/main arm64 libcurl3-gnutls arm64 7.
 Get:13 http://deb.debian.org/debian bookworm/main arm64 liberror-perl all 0.17029-2 [29.0 kB]
 Get:14 http://deb.debian.org/debian bookworm/main arm64 git-man all 1:2.39.5-0+deb12u3 [2053 kB]
 Get:15 http://deb.debian.org/debian bookworm/main arm64 git arm64 1:2.39.5-0+deb12u3 [7153 kB]
-Ign:15 http://deb.debian.org/debian bookworm/main arm64 git arm64 1:2.39.5-0+deb12u3
 Get:16 http://deb.debian.org/debian bookworm/main arm64 libxau6 arm64 1:1.0.9-1 [19.7 kB]
 Get:17 http://deb.debian.org/debian bookworm/main arm64 libxdmcp6 arm64 1:1.1.2-3 [25.4 kB]
 Get:18 http://deb.debian.org/debian bookworm/main arm64 libxcb1 arm64 1.15-1 [143 kB]
 Get:19 http://deb.debian.org/debian bookworm/main arm64 libx11-data all 2:1.8.4-2+deb12u2 [292 kB]
-Ign:19 http://deb.debian.org/debian bookworm/main arm64 libx11-data all 2:1.8.4-2+deb12u2
 Get:20 http://deb.debian.org/debian bookworm/main arm64 libx11-6 arm64 2:1.8.4-2+deb12u2 [735 kB]
 Get:21 http://deb.debian.org/debian bookworm/main arm64 libxext6 arm64 2:1.3.4-1+b1 [51.7 kB]
 Get:22 http://deb.debian.org/debian bookworm/main arm64 libxmuu1 arm64 2:1.1.3-3 [24.0 kB]
 Get:23 http://deb.debian.org/debian bookworm/main arm64 patch arm64 2.7.6-7 [121 kB]
 Get:24 http://deb.debian.org/debian bookworm/main arm64 xauth arm64 1:1.1.2-1 [35.5 kB]
-Get:1 http://deb.debian.org/debian bookworm/main arm64 perl-modules-5.36 all 5.36.0-7+deb12u3 [2815 kB]
-Ign:1 http://deb.debian.org/debian bookworm/main arm64 perl-modules-5.36 all 5.36.0-7+deb12u3
-Get:4 http://deb.debian.org/debian bookworm/main arm64 libperl5.36 arm64 5.36.0-7+deb12u3 [4009 kB]
-Get:15 http://deb.debian.org/debian bookworm/main arm64 git arm64 1:2.39.5-0+deb12u3 [7153 kB]
-Get:19 http://deb.debian.org/debian bookworm/main arm64 libx11-data all 2:1.8.4-2+deb12u2 [292 kB]
-Ign:19 http://deb.debian.org/debian bookworm/main arm64 libx11-data all 2:1.8.4-2+deb12u2
-Get:1 http://deb.debian.org/debian bookworm/main arm64 perl-modules-5.36 all 5.36.0-7+deb12u3 [2815 kB]
-Get:19 http://deb.debian.org/debian bookworm/main arm64 libx11-data all 2:1.8.4-2+deb12u2 [292 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 15.1 MB in 18min 48s (13.4 kB/s)
+Fetched 19.5 MB in 4min 6s (79.4 kB/s)
 Selecting previously unselected package perl-modules-5.36.
 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 9230 files and directories currently installed.)
 Preparing to unpack .../00-perl-modules-5.36_5.36.0-7+deb12u3_all.deb ...
@@ -266,10 +252,9 @@ The following NEW packages will be installed:
 0 upgraded, 1 newly installed, 0 to remove and 1 not upgraded.
 Need to get 313 kB of archives.
 After this operation, 522 kB of additional disk space will be used.
-Ign:1 http://deb.debian.org/debian bookworm/main arm64 lsof arm64 4.95.0-1
 Get:1 http://deb.debian.org/debian bookworm/main arm64 lsof arm64 4.95.0-1 [313 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 313 kB in 30s (10.3 kB/s)
+Fetched 313 kB in 3s (120 kB/s)
 Selecting previously unselected package lsof.
 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 12770 files and directories currently installed.)
 Preparing to unpack .../lsof_4.95.0-1_arm64.deb ...
@@ -292,7 +277,7 @@ Get:1 http://deb.debian.org/debian bookworm/main arm64 libpng16-16 arm64 1.6.39-
 Get:2 http://deb.debian.org/debian bookworm/main arm64 libqrencode4 arm64 4.1.1-1 [39.4 kB]
 Get:3 http://deb.debian.org/debian bookworm/main arm64 qrencode arm64 4.1.1-1 [41.9 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 352 kB in 8s (44.7 kB/s)
+Fetched 352 kB in 5s (77.9 kB/s)
 Selecting previously unselected package libpng16-16:arm64.
 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 12794 files and directories currently installed.)
 Preparing to unpack .../libpng16-16_1.6.39-2+deb12u5_arm64.deb ...
@@ -334,23 +319,15 @@ Get:3 http://deb.debian.org/debian bookworm/main arm64 cron arm64 3.0pl1-162 [71
 Get:4 http://deb.debian.org/debian bookworm/main arm64 liblockfile-bin arm64 1.17-1+b1 [20.4 kB]
 Get:5 http://deb.debian.org/debian bookworm/main arm64 exim4-config all 4.96-15+deb12u10 [257 kB]
 Get:6 http://deb.debian.org/debian bookworm/main arm64 exim4-base arm64 4.96-15+deb12u10 [1117 kB]
-Ign:6 http://deb.debian.org/debian bookworm/main arm64 exim4-base arm64 4.96-15+deb12u10
 Get:7 http://deb.debian.org/debian bookworm/main arm64 libevent-2.1-7 arm64 2.1.12-stable-8 [168 kB]
 Get:8 http://deb.debian.org/debian bookworm/main arm64 libunbound8 arm64 1.17.1-2+deb12u4 [511 kB]
-Ign:8 http://deb.debian.org/debian bookworm/main arm64 libunbound8 arm64 1.17.1-2+deb12u4
 Get:9 http://deb.debian.org/debian bookworm/main arm64 libgnutls-dane0 arm64 3.7.9-2+deb12u7 [405 kB]
-Ign:9 http://deb.debian.org/debian bookworm/main arm64 libgnutls-dane0 arm64 3.7.9-2+deb12u7
 Get:10 http://deb.debian.org/debian bookworm/main arm64 libidn12 arm64 1.41-1 [82.8 kB]
 Get:11 http://deb.debian.org/debian bookworm/main arm64 exim4-daemon-light arm64 4.96-15+deb12u10 [560 kB]
 Get:12 http://deb.debian.org/debian bookworm/main arm64 liblockfile1 arm64 1.17-1+b1 [16.8 kB]
 Get:13 http://deb.debian.org/debian bookworm/main arm64 bsd-mailx arm64 8.1.2-0.20220412cvs-1 [89.0 kB]
-Get:6 http://deb.debian.org/debian bookworm/main arm64 exim4-base arm64 4.96-15+deb12u10 [1117 kB]
-Ign:6 http://deb.debian.org/debian bookworm/main arm64 exim4-base arm64 4.96-15+deb12u10
-Get:8 http://deb.debian.org/debian bookworm/main arm64 libunbound8 arm64 1.17.1-2+deb12u4 [511 kB]
-Get:9 http://deb.debian.org/debian bookworm/main arm64 libgnutls-dane0 arm64 3.7.9-2+deb12u7 [405 kB]
-Get:6 http://deb.debian.org/debian bookworm/main arm64 exim4-base arm64 4.96-15+deb12u10 [1117 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 1618 kB in 1min 20s (20.3 kB/s)
+Fetched 3330 kB in 21s (156 kB/s)
 Selecting previously unselected package cron-daemon-common.
 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 12820 files and directories currently installed.)
 Preparing to unpack .../cron-daemon-common_3.0pl1-162_all.deb ...
@@ -450,7 +427,7 @@ Need to get 46.1 kB of archives.
 After this operation, 181 kB of additional disk space will be used.
 Get:1 http://deb.debian.org/debian bookworm/main arm64 iputils-ping arm64 3:20221126-1+deb12u1 [46.1 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 46.1 kB in 3s (13.4 kB/s)
+Fetched 46.1 kB in 5s (10.2 kB/s)
 Selecting previously unselected package iputils-ping.
 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 13136 files and directories currently installed.)
 Preparing to unpack .../iputils-ping_3%3a20221126-1+deb12u1_arm64.deb ...
@@ -469,7 +446,7 @@ Need to get 313 kB of archives.
 After this operation, 725 kB of additional disk space will be used.
 Get:1 http://deb.debian.org/debian bookworm/main arm64 libpcre3 arm64 2:8.39-15 [313 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 313 kB in 9s (35.5 kB/s)
+Fetched 313 kB in 3s (116 kB/s)
 Selecting previously unselected package libpcre3:arm64.
 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 13147 files and directories currently installed.)
 Preparing to unpack .../libpcre3_2%3a8.39-15_arm64.deb ...
@@ -504,9 +481,7 @@ The following NEW packages will be installed:
 Need to get 17.3 MB of archives.
 After this operation, 56.1 MB of additional disk space will be used.
 Get:1 http://deb.debian.org/debian bookworm/main arm64 manpages all 6.03-2 [1332 kB]
-Ign:1 http://deb.debian.org/debian bookworm/main arm64 manpages all 6.03-2
 Get:2 http://deb.debian.org/debian bookworm/main arm64 fonts-dejavu-core all 2.37-6 [1068 kB]
-Ign:2 http://deb.debian.org/debian bookworm/main arm64 fonts-dejavu-core all 2.37-6
 Get:3 http://deb.debian.org/debian bookworm/main arm64 fontconfig-config arm64 2.14.1-4 [315 kB]
 Get:4 http://deb.debian.org/debian bookworm/main arm64 libabsl20220623 arm64 20220623.1-1+deb12u2 [363 kB]
 Get:5 http://deb.debian.org/debian bookworm/main arm64 libaom3 arm64 3.6.0-1+deb12u2 [1373 kB]
@@ -530,7 +505,7 @@ Get:22 http://deb.debian.org/debian bookworm/main arm64 liblerc4 arm64 4.0.0+ds-
 Get:23 http://deb.debian.org/debian bookworm/main arm64 libwebp7 arm64 1.2.4-0.2+deb12u1 [260 kB]
 Get:24 http://deb.debian.org/debian bookworm/main arm64 libtiff6 arm64 4.5.0-6+deb12u4 [301 kB]
 Get:25 http://deb.debian.org/debian bookworm/main arm64 libxpm4 arm64 1:3.5.12-1.1+deb12u1 [45.4 kB]
-Get:26 http://deb.debian.org/debian bookworm/main arm64 libgd3 arm64 2.3.3-9 [113 kB]
+Get:26 http://deb.debian.org/debian-security bookworm-security/main arm64 libgd3 arm64 2.3.3-9+deb12u1 [113 kB]
 Get:27 http://deb.debian.org/debian bookworm/main arm64 libc-devtools arm64 2.36-9+deb12u14 [54.5 kB]
 Get:28 http://deb.debian.org/debian-security bookworm-security/main arm64 linux-libc-dev arm64 6.1.180-1 [2307 kB]
 Get:29 http://deb.debian.org/debian bookworm/main arm64 libcrypt-dev arm64 1:4.4.33-2 [121 kB]
@@ -543,10 +518,8 @@ Get:35 http://deb.debian.org/debian bookworm/main arm64 libpcre32-3 arm64 2:8.39
 Get:36 http://deb.debian.org/debian bookworm/main arm64 libpcrecpp0v5 arm64 2:8.39-15 [142 kB]
 Get:37 http://deb.debian.org/debian bookworm/main arm64 libpcre3-dev arm64 2:8.39-15 [584 kB]
 Get:38 http://deb.debian.org/debian bookworm/main arm64 manpages-dev all 6.03-2 [2030 kB]
-Get:1 http://deb.debian.org/debian bookworm/main arm64 manpages all 6.03-2 [1332 kB]
-Get:2 http://deb.debian.org/debian bookworm/main arm64 fonts-dejavu-core all 2.37-6 [1068 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 15.9 MB in 19min 7s (13.8 kB/s)
+Fetched 17.3 MB in 1min 25s (203 kB/s)
 Selecting previously unselected package manpages.
 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 13160 files and directories currently installed.)
 Preparing to unpack .../00-manpages_6.03-2_all.deb ...
@@ -624,8 +597,8 @@ Selecting previously unselected package libxpm4:arm64.
 Preparing to unpack .../24-libxpm4_1%3a3.5.12-1.1+deb12u1_arm64.deb ...
 Unpacking libxpm4:arm64 (1:3.5.12-1.1+deb12u1) ...
 Selecting previously unselected package libgd3:arm64.
-Preparing to unpack .../25-libgd3_2.3.3-9_arm64.deb ...
-Unpacking libgd3:arm64 (2.3.3-9) ...
+Preparing to unpack .../25-libgd3_2.3.3-9+deb12u1_arm64.deb ...
+Unpacking libgd3:arm64 (2.3.3-9+deb12u1) ...
 Selecting previously unselected package libc-devtools.
 Preparing to unpack .../26-libc-devtools_2.36-9+deb12u14_arm64.deb ...
 Unpacking libc-devtools (2.36-9+deb12u14) ...
@@ -704,7 +677,7 @@ Setting up libc6-dev:arm64 (2.36-9+deb12u14) ...
 Setting up libfontconfig1:arm64 (2.14.1-4) ...
 Setting up libpcre3-dev:arm64 (2:8.39-15) ...
 Setting up libheif1:arm64 (1.15.1-1+deb12u1) ...
-Setting up libgd3:arm64 (2.3.3-9) ...
+Setting up libgd3:arm64 (2.3.3-9+deb12u1) ...
 Setting up libc-devtools (2.36-9+deb12u14) ...
 Processing triggers for libc-bin (2.36-9+deb12u14) ...
 
@@ -720,7 +693,7 @@ Need to get 913 kB of archives.
 After this operation, 1338 kB of additional disk space will be used.
 Get:1 http://deb.debian.org/debian bookworm/main arm64 zlib1g-dev arm64 1:1.2.13.dfsg-1 [913 kB]
 debconf: delaying package configuration, since apt-utils is not installed
-Fetched 913 kB in 22s (41.5 kB/s)
+Fetched 913 kB in 3s (304 kB/s)
 Selecting previously unselected package zlib1g-dev:arm64.
 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 17895 files and directories currently installed.)
 Preparing to unpack .../zlib1g-dev_1%3a1.2.13.dfsg-1_arm64.deb ...
@@ -728,11 +701,11 @@ Unpacking zlib1g-dev:arm64 (1:1.2.13.dfsg-1) ...
 Setting up zlib1g-dev:arm64 (1:1.2.13.dfsg-1) ...
 [32m[OK][0m [42;30m 安装 iputils-ping libpcre3 libpcre3-dev zlib1g-dev 完成 [0m
 [32m[OK][0m [42;30m Nginx 链接库安装 完成 [0m
-  [CI] ip_check: local_ip=192.18.143.22, ip_version=IPv4
+  [CI] ip_check: local_ip=180.115.91.208, ip_version=IPv4
   [CI] shortIds_set: shortIds=<redacted length=16>
-[32m spiderX: /static/esbg68xb.js [0m
+[32m spiderX: /static/egge1v7d.js [0m
 [32m[OK][0m [42;30m 14431 端口未被占用 [0m
-./install.sh: line 3240: xray: command not found
+./install.sh: line 3288: xray: command not found
 [32m[OK][0m [42;30m 即将安装 Xray v26.3.27 [0m
 tput: No value for $TERM and no -T specified
 tput: No value for $TERM and no -T specified
@@ -742,12 +715,12 @@ info: Installing specified Xray version v26.3.27 for aarch64
 Downloading Xray archive: https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-arm64-v8a.zip
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
-  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0
-  0     0    0     0    0     0      0      0 --:--:--  0:00:02 --:--:--     0  0 18.8M    0 81911    0     0  27067      0  0:12:08  0:00:03  0:12:05  131k  2 18.8M    2  415k    0     0   104k      0  0:03:05  0:00:03  0:03:02  263k 11 18.8M   11 2240k    0     0   452k      0  0:00:42  0:00:04  0:00:38  885k 24 18.8M   24 4775k    0     0   789k      0  0:00:24  0:00:06  0:00:18 1315k 42 18.8M   42 8087k    0     0  1155k      0  0:00:16  0:00:06  0:00:10 1766k 72 18.8M   72 13.6M    0     0  1745k      0  0:00:11  0:00:08  0:00:03 2785k100 18.8M  100 18.8M    0     0  2191k      0  0:00:08  0:00:08 --:--:-- 3936k
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:01 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:02 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:03 --:--:--     0
+  0     0    0     0    0     0      0      0 --:--:--  0:00:04 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:04 --:--:--     0  0     0    0     0    0     0      0      0 --:--:--  0:00:05 --:--:--     0  0 18.8M    0 32493    0     0   4869      0  1:07:29  0:00:06  1:07:23 15951  2 18.8M    2  536k    0     0  70080      0  0:04:41  0:00:07  0:04:34  167k 10 18.8M   10 2072k    0     0   233k      0  0:01:22  0:00:08  0:01:14  487k 38 18.8M   38 7400k    0     0   763k      0  0:00:25  0:00:09  0:00:16 1562k 68 18.8M   68 12.8M    0     0  1223k      0  0:00:15  0:00:10  0:00:05 2752k100 18.8M  100 18.8M    0     0  1645k      0  0:00:11  0:00:11 --:--:-- 3822k100 18.8M  100 18.8M    0     0  1645k      0  0:00:11  0:00:11 --:--:-- 4847k
 ok.
 Downloading verification file for Xray archive: https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-arm64-v8a.zip.dgst
 ok.
-info: Extract the Xray package to /tmp/tmp.EKXnfY5QLg and prepare it for installation.
+info: Extract the Xray package to /tmp/tmp.nkNIIAVEoT and prepare it for installation.
 rm: cannot remove '/etc/systemd/system/xray.service.d/10-donot_touch_multi_conf.conf': No such file or directory
 rm: cannot remove '/etc/systemd/system/xray@.service.d/10-donot_touch_multi_conf.conf': No such file or directory
 info: Systemd service files have been installed successfully!
@@ -791,7 +764,7 @@ installed: /var/log/xray/access.log
 installed: /var/log/xray/error.log
 installed: /etc/systemd/system/xray.service
 installed: /etc/systemd/system/xray@.service
-removed: /tmp/tmp.EKXnfY5QLg
+removed: /tmp/tmp.nkNIIAVEoT
 info: Xray v26.3.27 is installed.
 You may need to execute a command to remove dependent software: apt purge curl unzip
 Created symlink /etc/systemd/system/multi-user.target.wants/xray.service → /etc/systemd/system/xray.service.
@@ -824,8 +797,8 @@ Created symlink /etc/systemd/system/multi-user.target.wants/xray.service → /et
 --- Xray config validation ---
 Xray 26.3.27 (Xray, Penetrates Everything.) d2758a0 (go1.26.1 linux/arm64)
 A unified platform for anti-censorship.
-2026/08/10 16:00:41.096756 [Info] infra/conf/serial: Reading config: &{Name:/etc/idleleo/conf/xray/config.json Format:json}
-2026/08/10 16:00:41.096785 [Warning] infra/conf: REALITY: Listening on non-443 ports may get your IP blocked by the GFW
+2026/08/12 09:57:02.813364 [Info] infra/conf/serial: Reading config: &{Name:/etc/idleleo/conf/xray/config.json Format:json}
+2026/08/12 09:57:02.813396 [Warning] infra/conf: REALITY: Listening on non-443 ports may get your IP blocked by the GFW
 Configuration OK.
   ✅ PASS: Xray config is valid
 
