@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "route-plan.v1.schema.json",
+  "title": "Route Plan",
+  "type": "object",
+  "required": [
+    "schemaVersion", "recommendationId", "createdAtEpochSeconds",
+    "expiresAtEpochSeconds", "configurationGeneration", "sourceConfigSha256",
+    "topologySha256", "risk", "reasonCode", "operations",
+    "preconditions", "verification", "managedScopeOnly", "planSha256"
+  ],
+  "properties": {
+    "schemaVersion": {"type": "integer", "enum": [1]},
+    "recommendationId": {"type": "string"},
+    "createdAtEpochSeconds": {"type": "integer"},
+    "expiresAtEpochSeconds": {"type": "integer"},
+    "configurationGeneration": {"type": "integer"},
+    "sourceConfigSha256": {"type": "string"},
+    "topologySha256": {"type": "string"},
+    "risk": {"type": "string", "enum": ["low", "medium", "high"]},
+    "reasonCode": {"type": "string"},
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["op", "params", "managedScope"],
+        "properties": {
+          "op": {"type": "string", "enum": ["routingRule.insert", "routingRule.removeManaged", "routingRule.replaceManaged", "routingRule.moveManaged"]},
+          "params": {"type": "object"},
+          "managedScope": {"type": "boolean"}
+        }
+      }
+    },
+    "preconditions": {"type": "array", "items": {"type": "string"}},
+    "verification": {"type": "array", "items": {"type": "string"}},
+    "managedScopeOnly": {"type": "boolean"},
+    "planSha256": {"type": "string"}
+  }
+}
