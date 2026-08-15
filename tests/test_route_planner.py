@@ -46,6 +46,7 @@ class RoutePlannerTest(unittest.TestCase):
         p = planner().plan([INSERT])
         self.assertEqual(p['schemaVersion'], 1)
         self.assertEqual(set(p), {'schemaVersion', 'recommendationId',
+                                  'semanticFingerprint',
                                   'createdAtEpochSeconds', 'expiresAtEpochSeconds',
                                   'configurationGeneration', 'sourceConfigSha256',
                                   'topologySha256', 'risk', 'reasonCode',

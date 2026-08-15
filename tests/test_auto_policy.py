@@ -171,16 +171,29 @@ class AutoPolicyTest(unittest.TestCase):
             p2 = make_policy(td, now=3600)
             self.assertEqual(p2.snapshot()['autoMutationsLastHour'], 0)
 
-    def test_corrupt_policy_file_fails_closed(self):
+    def test_corrupt_policy_file_blocks_auto(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / 'auto-policy.json'
             path.write_text('{not json')
             p = AutoPolicy(path)
             s = p.snapshot()
-            self.assertFalse(s['fuseOpen'])
-            self.assertEqual(s['consecutiveRollbacks'], 0)
+            self.assertEqual(s['integrity'], 'invalid')
+            self.assertFalse(s['canAutoApply'])
+            self.assertIsNotNone(s['corruptReason'])
+            # Never silently reset: a corrupt policy must not look fresh.
+            allowed, blocked = p.evaluate('rec-001')
+            self.assertFalse(allowed)
+            self.assertIn('policy_corrupt', blocked)
+            # Mutating a corrupt policy must fail closed.
+            from rill_xray_agent.auto_policy import AutoPolicyIntegrityError
+            with self.assertRaises(AutoPolicyIntegrityError):
+                p.record_apply('rec-001')
+            with self.assertRaises(AutoPolicyIntegrityError):
+                p.record_rollback()
+            with self.assertRaises(AutoPolicyIntegrityError):
+                p.acknowledge_fuse(True)
 
-    def test_malformed_policy_values_fail_closed(self):
+    def test_malformed_policy_values_block_auto(self):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / 'auto-policy.json'
             path.write_text(json.dumps({
@@ -189,8 +202,77 @@ class AutoPolicyTest(unittest.TestCase):
                 'fuseAcknowledged': 1}))
             p = AutoPolicy(path)
             s = p.snapshot()
-            self.assertFalse(s['fuseOpen'])
-            self.assertEqual(s['consecutiveRollbacks'], 0)
+            self.assertEqual(s['integrity'], 'invalid')
+            self.assertFalse(s['canAutoApply'])
+            allowed, blocked = p.evaluate('rec-001')
+            self.assertFalse(allowed)
+            self.assertIn('policy_corrupt', blocked)
+
+    def test_missing_policy_file_is_fresh_and_valid(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = AutoPolicy(Path(td) / 'auto-policy.json')
+            s = p.snapshot()
+            self.assertEqual(s['integrity'], 'valid')
+            self.assertTrue(s['canAutoApply'])
+            allowed, _ = p.evaluate('rec-001')
+            self.assertTrue(allowed)
+
+    def test_symlink_policy_file_blocks_auto(self):
+        with tempfile.TemporaryDirectory() as td:
+            target = Path(td) / 'target.json'
+            target.write_text(json.dumps({
+                'lastAutoAtEpochSeconds': 0, 'lastByRecommendation': {},
+                'mutationTimes': [], 'consecutiveRollbacks': 0,
+                'fuseOpen': False, 'fuseOpenedAtEpochSeconds': None,
+                'fuseAcknowledged': False}))
+            link = Path(td) / 'auto-policy.json'
+            link.symlink_to(target.name)
+            p = AutoPolicy(link)
+            s = p.snapshot()
+            self.assertEqual(s['integrity'], 'invalid')
+            self.assertFalse(s['canAutoApply'])
+            self.assertIn('symlink', s['corruptReason'])
+
+    def test_dangling_symlink_policy_file_blocks_auto(self):
+        # A dangling symlink fails exists() but is still a symlink: it must
+        # never be treated as a fresh install (§15 fail-closed).
+        with tempfile.TemporaryDirectory() as td:
+            link = Path(td) / 'auto-policy.json'
+            link.symlink_to('does-not-exist.json')
+            p = AutoPolicy(link)
+            s = p.snapshot()
+            self.assertEqual(s['integrity'], 'invalid')
+            self.assertFalse(s['canAutoApply'])
+            self.assertIn('symlink', s['corruptReason'])
+            with self.assertRaises(Exception):
+                p.record_apply('rec-001')
+
+    def test_world_writable_policy_file_blocks_auto(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / 'auto-policy.json'
+            path.write_text(json.dumps({
+                'lastAutoAtEpochSeconds': 0, 'lastByRecommendation': {},
+                'mutationTimes': [], 'consecutiveRollbacks': 0,
+                'fuseOpen': False, 'fuseOpenedAtEpochSeconds': None,
+                'fuseAcknowledged': False}))
+            path.chmod(0o666)
+            p = AutoPolicy(path)
+            s = p.snapshot()
+            self.assertEqual(s['integrity'], 'invalid')
+            self.assertFalse(s['canAutoApply'])
+
+    def test_valid_policy_with_extra_keys_tolerated(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / 'auto-policy.json'
+            path.write_text(json.dumps({
+                'lastAutoAtEpochSeconds': 0, 'lastByRecommendation': {},
+                'mutationTimes': [], 'consecutiveRollbacks': 0,
+                'fuseOpen': False, 'fuseOpenedAtEpochSeconds': None,
+                'fuseAcknowledged': False, 'futureField': 'x'}))
+            p = AutoPolicy(path)
+            s = p.snapshot()
+            self.assertEqual(s['integrity'], 'valid')
+            self.assertTrue(s['canAutoApply'])
 
 
 if __name__ == '__main__':

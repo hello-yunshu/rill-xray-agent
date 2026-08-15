@@ -32,35 +32,24 @@ from pathlib import Path
 from .canonical import atomic_write_bytes, canonical_bytes, digest, file_sha256, read_json
 from .errors import ContractError, TransactionError
 from .root_txn import RootTransaction
-from .route_planner import ALLOWED_OPS
+from .root_policy import DEFAULT_PROJECTION_PATH, RootExecutionPolicy, RootPolicyIntegrityError
+from .route_analyzer import RECOMMENDATION_TYPES
+from .route_contract import (ALLOWED_OPS, INDEX_KEYS, MAX_OPERATIONS, MAX_PARAMS,
+                             MAX_REQUEST_BYTES, MAX_RULES, OP_PARAM_KEYS, SAFE_CHARS,
+                             SHA_RE, overall_risk)
 
 # Fixed production locations (overridable only for tests via env).
 DEFAULT_APPLY_SPOOL_DIR = Path('/var/spool/rill-xray-agent-apply')
 DEFAULT_MANAGED_CONFIG_PATH = Path(
     os.environ.get('RILL_MANAGED_CONFIG', '/etc/rill-xray-agent/host/conf/xray/config.json'))
 MANAGED_PREFIX = 'rill-managed-'
-MAX_REQUEST_BYTES = 256 * 1024
-MAX_RULES = 512
-MAX_OPERATIONS = 32
-MAX_PARAMS = 8
 ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,128}$')
-SHA_RE = re.compile(r'^[a-f0-9]{64}$')
 
 # applyType -> release feature gates that must hold in the CURRENT manifest.
 APPLY_TYPE_RELEASE = {
     'manual': ('routeAssist',),
     'auto': ('routeAssist', 'boundedAuto'),
 }
-
-OP_PARAM_KEYS = {
-    'routingRule.insert': {'position', 'selectorType', 'selectorValue', 'outboundTag'},
-    'routingRule.removeManaged': {'ruleIndex'},
-    'routingRule.replaceManaged': {'ruleIndex', 'selectorType', 'selectorValue', 'outboundTag'},
-    'routingRule.moveManaged': {'fromIndex', 'toIndex'},
-}
-INDEX_KEYS = {'position', 'ruleIndex', 'fromIndex', 'toIndex'}
-SAFE_CHARS = frozenset(
-    'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_:,/@+')
 
 
 def _safe_string(value):
@@ -96,8 +85,8 @@ def validate_apply_request(request):
     """
     if not isinstance(request, dict):
         raise ContractError('apply request must be an object')
-    if request.get('schemaVersion') != 1:
-        raise ContractError('apply request schemaVersion != 1')
+    if request.get('schemaVersion') != 2:
+        raise ContractError('apply request schemaVersion != 2')
     if len(json.dumps(request)) > MAX_REQUEST_BYTES:
         raise ContractError('apply request oversized')
     rid = request.get('recommendationId')
@@ -113,6 +102,25 @@ def validate_apply_request(request):
     generation = request.get('configurationGeneration')
     if not isinstance(generation, int) or isinstance(generation, bool) or generation < 0:
         raise ContractError('invalid configurationGeneration')
+    # Root-authoritative epoch binding (§12): the request must be bound to the
+    # exact execution epoch that authorizes it. The root executor re-checks
+    # this value against the CURRENT root execution policy before any mutation.
+    epoch = request.get('executionEpoch')
+    if not isinstance(epoch, int) or isinstance(epoch, bool) or epoch < 0:
+        raise ContractError('invalid executionEpoch')
+    # Recommendation identity (§22/§24): a fixed enum type plus the semantic
+    # fingerprint used by the same-recommendation cooldown.
+    rtype = request.get('recommendationType')
+    if not isinstance(rtype, str) or rtype not in RECOMMENDATION_TYPES:
+        raise ContractError('invalid recommendationType')
+    fingerprint = request.get('semanticFingerprint')
+    if not isinstance(fingerprint, str) or not ID_RE.match(fingerprint):
+        raise ContractError('invalid semanticFingerprint')
+    # Root policy snapshot digest (audit/binding only; the executor re-computes
+    # every authorization decision and never trusts the snapshot booleans).
+    policy_snapshot = request.get('policySnapshotDigest')
+    if not isinstance(policy_snapshot, str) or not SHA_RE.match(policy_snapshot):
+        raise ContractError('invalid policySnapshotDigest')
     for key in ('sourceConfigSha256', 'planSha256', 'requestSha256'):
         value = request.get(key)
         if not isinstance(value, str) or not SHA_RE.match(value):
@@ -309,7 +317,8 @@ class RouteExecutor:
     """
 
     def __init__(self, state_root, txn_root, spool_dir=None, release_capabilities=None,
-                 managed_config_path=None, xray_bin=None, allowed_producer_uids=None):
+                 managed_config_path=None, xray_bin=None, allowed_producer_uids=None,
+                 root_policy=None, projection_path=None):
         self.state_root = Path(state_root)
         self.txn_root = Path(txn_root)
         self.spool_dir = Path(spool_dir or DEFAULT_APPLY_SPOOL_DIR)
@@ -328,6 +337,12 @@ class RouteExecutor:
         self.xray_bin = Path(xray_bin or os.environ.get('RILL_XRAY_BIN', '/usr/local/bin/xray'))
         self.allowed_producer_uids = set(allowed_producer_uids) if allowed_producer_uids is not None \
             else {0}
+        # Root-authoritative execution policy (§16). The executor NEVER trusts
+        # the request's mode/stage/confirmation; it re-reads epoch, mode,
+        # routeStage and the auto ledger from this root-owned policy and
+        # re-evaluates risk/allowlist from the live config.
+        self.root_policy = root_policy if root_policy is not None else RootExecutionPolicy()
+        self.projection_path = Path(projection_path or DEFAULT_PROJECTION_PATH)
 
     # ---- spool safety -------------------------------------------------
     def check_spool_file(self, path):
@@ -401,6 +416,56 @@ class RouteExecutor:
             elif not self.release.is_released(feature):
                 blocked.append('feature_not_released')
         return blocked
+
+    def _root_gate(self, request):
+        """Root-authoritative authorization gate (§12/§13/§16/§19).
+
+        The request body is NOT the authority: mode, routeStage, confirmation,
+        epoch and auto eligibility are re-read from the root-owned execution
+        policy and the LIVE managed config. Any stale/corrupt/mismatched state
+        fails closed. Never mutates persistent state.
+        """
+        blocked = []
+        rp = self.root_policy
+        if not rp.integrity_valid:
+            blocked.append('root_policy_corrupt')
+        if rp.mode() != 'normal':
+            blocked.append('root_mode_not_normal')
+        if request.get('executionEpoch') != rp.execution_epoch():
+            blocked.append('execution_epoch_mismatch')
+        apply_type = request.get('applyType')
+        stage = rp.route_stage()
+        if apply_type == 'manual':
+            if stage not in ('assist', 'auto'):
+                blocked.append('route_stage_not_assist')
+        elif apply_type == 'auto':
+            if stage != 'auto':
+                blocked.append('route_stage_not_auto')
+            # Root-side auto eligibility: the executor re-evaluates the risk
+            # against the LIVE managed rules and the op allowlist itself. It
+            # never trusts a request-declared risk label.
+            rules = self._current_rules()
+            risk = overall_risk(request.get('operations') or [], rules)
+            auto_ok, auto_blocked = rp.evaluate(
+                request.get('recommendationId'),
+                request.get('executionEpoch'),
+                risk,
+                request.get('operations') or [])
+            if not auto_ok:
+                blocked.extend(auto_blocked)
+        return blocked
+
+    def _current_rules(self):
+        """Routing rules from the LIVE managed config (for root-side risk
+        re-evaluation). Returns [] on any anomaly so risk defaults high."""
+        try:
+            if not self.managed_config_path.is_file() or self.managed_config_path.is_symlink():
+                return []
+            data = read_json(self.managed_config_path)
+            rules = (data or {}).get('routing', {}).get('rules')
+            return rules if isinstance(rules, list) else []
+        except (ValueError, OSError):
+            return []
 
     def _recover_and_report(self, claim_path):
         """A claim already exists: the previous run either crashed mid-way or
@@ -478,6 +543,14 @@ class RouteExecutor:
                 return self._blocked_result(request, ['effective_stage_not_auto'])
             if request.get('applyType') == 'manual' and request.get('effectiveStage') not in ('assist', 'auto'):
                 return self._blocked_result(request, ['effective_stage_not_assist'])
+            # Root-authoritative authorization gate (§12/§13/§16/§19). The
+            # request body is never the authority: mode / routeStage /
+            # executionEpoch / auto confirmation / cooldown / rate / fuse /
+            # risk / op-allowlist are all re-read from the ROOT policy and the
+            # LIVE managed config. Any stale or corrupt root state blocks.
+            blocked = self._root_gate(request)
+            if blocked:
+                return self._blocked_result(request, blocked)
             # Managed config digest/generation binding against the CURRENT file.
             if not self.managed_config_path.is_file() or self.managed_config_path.is_symlink():
                 return self._blocked_result(request, ['managed_config_missing'])
@@ -525,6 +598,18 @@ class RouteExecutor:
             # handled inside RootTransaction; surface the structured outcome.
             return self._error_result(request, claim_path, exc)
         status = result['status']
+        # Root-side auto ledger (§16): record actual auto mutations and
+        # rollbacks into the ROOT-owned ledger so cooldown / rate / fuse are
+        # recomputed root-side. Only real auto executions (never manual, and
+        # never a blocked/stale request) reach here.
+        if request.get('applyType') == 'auto':
+            if status == 'committed':
+                self.root_policy.record_apply(rid)
+            elif status in ('rolledBack', 'rollbackUnverified'):
+                self.root_policy.record_rollback()
+        # Refresh the safe root-policy projection so the unprivileged
+        # Runtime/UI immediately sees the updated epoch / confirmation / fuse.
+        self._refresh_projection()
         return {
             'schemaVersion': 1,
             'recommendationId': rid,
@@ -540,6 +625,15 @@ class RouteExecutor:
             'receiptSha256': result['receipt'].get('resultSha256'),
             'committedAtEpochSeconds': int(time.time()),
         }
+
+    def _refresh_projection(self):
+        """Refresh the safe root-policy projection for the Runtime/UI.
+        Best-effort: a projection write failure never alters the executed
+        transaction outcome."""
+        try:
+            self.root_policy.write_projection(self.projection_path)
+        except Exception:
+            pass
 
     def _blocked_result(self, request, blocked):
         return {

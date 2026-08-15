@@ -35,7 +35,12 @@ def policy(caps, mode='normal', stage='observe', **kw):
     defaults = dict(mode=mode, configured_stage=stage, release_capabilities=caps,
                     health=READY_HEALTH, recovery_required=False,
                     observation_fresh=True, observation_integrity_valid=True,
-                    timeline_integrity_valid=True)
+                    timeline_integrity_valid=True,
+                    plan_valid=True, plan_not_expired=True,
+                    generation_match=True, config_hash_match=True,
+                    execution_epoch_match=True, fusible_open=True,
+                    rate_limit_ok=True, cooldown_ok=True, auto_confirmed=True,
+                    risk_auto_eligible=True, auto_allowlisted_op=True)
     defaults.update(kw)
     return RoutePolicy(**defaults)
 
@@ -143,6 +148,44 @@ class RoutePolicyInvariant(unittest.TestCase):
             self.assertFalse(d['canAutoApply'])
             self.assertEqual(d['effectiveStage'], 'observe')
             self.assertIn('feature_not_released', d['blockedBy'])
+
+    def test_fail_closed_defaults_block_everything(self):
+        # §14: with default (unproven) safety inputs, no apply may ever pass.
+        with tempfile.TemporaryDirectory() as td:
+            caps = open_caps(td)
+            d = RoutePolicy(mode='normal', configured_stage='auto',
+                            release_capabilities=caps, health=READY_HEALTH,
+                            recovery_required=False, observation_fresh=True,
+                            observation_integrity_valid=True,
+                            timeline_integrity_valid=True).evaluate()
+            self.assertFalse(d['canManualApply'])
+            self.assertFalse(d['canAutoApply'])
+            self.assertEqual(d['effectiveStage'], 'observe')
+            for reason in ('plan_invalid', 'generation_mismatch',
+                           'config_hash_mismatch', 'execution_epoch_mismatch',
+                           'auto_requires_confirmation', 'auto_risk_not_eligible',
+                           'auto_op_not_allowlisted'):
+                self.assertIn(reason, d['blockedBy'])
+
+    def test_execution_epoch_mismatch_blocks(self):
+        with tempfile.TemporaryDirectory() as td:
+            caps = open_caps(td)
+            d = policy(caps, mode='normal', stage='assist',
+                       execution_epoch_match=False).evaluate()
+            self.assertFalse(d['canManualApply'])
+            self.assertIn('execution_epoch_mismatch', d['blockedBy'])
+
+    def test_auto_risk_and_op_allowlist_gates(self):
+        with tempfile.TemporaryDirectory() as td:
+            caps = open_caps(td)
+            d = policy(caps, mode='normal', stage='auto',
+                       risk_auto_eligible=False).evaluate()
+            self.assertFalse(d['canAutoApply'])
+            self.assertIn('auto_risk_not_eligible', d['blockedBy'])
+            d2 = policy(caps, mode='normal', stage='auto',
+                        auto_allowlisted_op=False).evaluate()
+            self.assertFalse(d2['canAutoApply'])
+            self.assertIn('auto_op_not_allowlisted', d2['blockedBy'])
 
 
 def _envelope(method, body, cap='route'):
