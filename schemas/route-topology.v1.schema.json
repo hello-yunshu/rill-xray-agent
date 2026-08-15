@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "route-topology.v1.schema.json",
+  "title": "Route Topology Projection",
+  "type": "object",
+  "required": ["schemaVersion", "capturedAtEpochSeconds", "configGeneration", "wholeConfigSha256", "routingRulesCount", "rules"],
+  "properties": {
+    "schemaVersion": {"type": "integer", "enum": [1]},
+    "capturedAtEpochSeconds": {"type": "integer"},
+    "configGeneration": {"type": "integer"},
+    "wholeConfigSha256": {"type": "string"},
+    "routingRulesCount": {"type": "integer"},
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["ruleIndex", "ruleKind", "selectorType", "selectorDigest", "outboundTag", "isManaged", "hasCatchAll", "position"],
+        "properties": {
+          "ruleIndex": {"type": "integer"},
+          "ruleKind": {"type": "string", "enum": ["domain", "ip", "field", "other"]},
+          "selectorType": {"type": "string"},
+          "selectorDigest": {"type": "string"},
+          "outboundTag": {"type": "string"},
+          "isManaged": {"type": "boolean"},
+          "hasCatchAll": {"type": "boolean"},
+          "position": {"type": "integer"}
+        }
+      }
+    }
+  }
+}
