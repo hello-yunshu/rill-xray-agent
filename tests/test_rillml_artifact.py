@@ -166,6 +166,53 @@ class ReleaseIndexParseTest(unittest.TestCase):
         self.assertEqual(payload['channel'], 'stable')
         self.assertEqual(len(payload['artifacts']), 1)
 
+    def test_real_style_index_with_model_and_handler(self):
+        # The real upstream stable index mixes runtime / model / handler
+        # entries; only runtime entries are platform-bound. This mirrors the
+        # published v1.1.0 stable-index.json shape (verified against upstream).
+        model = {
+            'kind': 'model', 'id': 'rillml.example.default', 'version': '1.1.0',
+            'runtimeApiVersion': 2,
+            'url': ('https://github.com/hello-yunshu/rill-ml/releases/download/'
+                    'v1.1.0/example-default-1.1.0.rillpack'),
+            'size': 456, 'sha256': 'cd' * 32,
+        }
+        handler = {
+            'kind': 'handler', 'id': 'rillml.echo.handler', 'version': '1.1.0',
+            'runtimeApiVersion': 2, 'handlerApiVersion': 2,
+            'minRuntimeVersion': '1.0.0',
+            'url': ('https://github.com/hello-yunshu/rill-ml/releases/download/'
+                    'v1.1.0/echo-handler-1.1.0.rillhandler'),
+            'size': 789, 'sha256': 'ef' * 32,
+        }
+        text = make_index([runtime_artifact(), model, handler])
+        payload = parse_release_index(
+            text.decode(), trusted_key_id=TEST_KEY_ID,
+            public_key_hex=TEST_PUB_HEX, channel='stable')
+        kinds = sorted(a['kind'] for a in payload['artifacts'])
+        self.assertEqual(kinds, ['handler', 'model', 'runtime'])
+
+    def test_runtime_artifact_requires_target_os(self):
+        broken = runtime_artifact()
+        del broken['targetOs']
+        text = make_index([broken])
+        with self.assertRaises(RillMLValidationError):
+            parse_release_index(text.decode(), trusted_key_id=TEST_KEY_ID,
+                                public_key_hex=TEST_PUB_HEX)
+
+    def test_handler_requires_handler_api_version(self):
+        handler = {
+            'kind': 'handler', 'id': 'rillml.echo.handler', 'version': '1.1.0',
+            'runtimeApiVersion': 2,
+            'url': ('https://github.com/hello-yunshu/rill-ml/releases/download/'
+                    'v1.1.0/echo-handler-1.1.0.rillhandler'),
+            'size': 789, 'sha256': 'ef' * 32,
+        }
+        text = make_index([runtime_artifact(), handler])
+        with self.assertRaises(RillMLValidationError):
+            parse_release_index(text.decode(), trusted_key_id=TEST_KEY_ID,
+                                public_key_hex=TEST_PUB_HEX)
+
     def test_tampered_signature_rejected(self):
         raw = make_index([runtime_artifact()])
         raw = raw[:-2] + b'00'  # flip the trailing signature bytes
