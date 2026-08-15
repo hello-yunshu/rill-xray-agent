@@ -92,6 +92,39 @@ def rule_at(rules, index):
     return None
 
 
+# Selector field names as they appear in a REAL Xray rule. Xray rules carry
+# fields such as ``domain``/``ip``/``port``/``network``/``protocol``/``source``
+# directly; they never carry a synthetic ``selectorType`` key. This is the
+# single mapping used to derive a selector type from a live rule (see §4).
+SELECTOR_FIELD_ORDER = ('domain', 'ip', 'network', 'port', 'protocol', 'source',
+                        'inboundTag', 'user', 'email')
+
+
+def rule_selector_type(rule):
+    """Derive the selector type of a live Xray rule from its actual fields.
+
+    Returns the FIRST present selector field (in contract order) or None. The
+    planner and the root executor share this so their risk classification is
+    semantically identical; the root executor remains the final authority.
+
+    Also understands the SAFE topology projection rule shape (route_topology):
+    a projected rule records its selector types explicitly as ``selectorTypes``
+    (ordered list), so the advisory planner risk can be computed from the
+    secret-free projection without ever reading the raw Xray config (§4/§P0-4).
+    """
+    if not isinstance(rule, dict):
+        return None
+    st = rule.get('selectorTypes')
+    if isinstance(st, list) and st and isinstance(st[0], str):
+        return st[0]
+    for field in SELECTOR_FIELD_ORDER:
+        value = rule.get(field)
+        if value is not None and not (isinstance(value, (list, str, int))
+                                      and value == []):
+            return field
+    return None
+
+
 def op_risk(op, rules):
     """Deterministic risk classification of a single typed operation,
     evaluated against the CURRENT routing rules.
@@ -114,7 +147,11 @@ def op_risk(op, rules):
         return 'low'
     if opname == 'routingRule.replaceManaged':
         current = rule_at(rules, params.get('ruleIndex'))
-        if current and current.get('selectorType') == params.get('selectorType'):
+        # §4: real Xray rules never carry a synthetic ``selectorType`` field.
+        # Derive the current selector type from the live rule's actual fields
+        # and compare it to the operation's target selector type.
+        current_type = rule_selector_type(current)
+        if current_type is not None and current_type == params.get('selectorType'):
             return 'low'
         return 'medium'
     if opname == 'routingRule.moveManaged':
