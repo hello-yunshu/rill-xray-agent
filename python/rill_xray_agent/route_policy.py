@@ -1,9 +1,20 @@
 class RoutePolicy:
+    """Fail-closed route execution policy.
+
+    Every safety parameter is REQUIRED or defaults to False. A missing safety
+    input (plan validity, generation/hash/epoch match, fuse, rate, cooldown,
+    auto confirmation, risk eligibility) can never widen the apply window: the
+    default is always "not proven -> blocked". Callers that genuinely hold a
+    proven value pass it explicitly.
+    """
+
     def __init__(self, mode, configured_stage, release_capabilities, health,
                  recovery_required, observation_fresh, observation_integrity_valid,
-                 timeline_integrity_valid, plan_valid=True, plan_not_expired=True,
-                 generation_match=True, config_hash_match=True, fusible_open=True,
-                 rate_limit_ok=True, cooldown_ok=True, auto_confirmed=True):
+                 timeline_integrity_valid, plan_valid=False, plan_not_expired=False,
+                 generation_match=False, config_hash_match=False,
+                 execution_epoch_match=False, fusible_open=False,
+                 rate_limit_ok=False, cooldown_ok=False, auto_confirmed=False,
+                 risk_auto_eligible=False, auto_allowlisted_op=False):
         self.mode = mode
         self.configured_stage = configured_stage
         self.release_capabilities = release_capabilities
@@ -16,10 +27,13 @@ class RoutePolicy:
         self.plan_not_expired = plan_not_expired
         self.generation_match = generation_match
         self.config_hash_match = config_hash_match
+        self.execution_epoch_match = execution_epoch_match
         self.fusible_open = fusible_open
         self.rate_limit_ok = rate_limit_ok
         self.cooldown_ok = cooldown_ok
         self.auto_confirmed = auto_confirmed
+        self.risk_auto_eligible = risk_auto_eligible
+        self.auto_allowlisted_op = auto_allowlisted_op
         self._decision = None
 
     def evaluate(self):
@@ -81,6 +95,10 @@ class RoutePolicy:
                 blocked.append('generation_mismatch')
             if not self.config_hash_match:
                 blocked.append('config_hash_mismatch')
+            # Root-side execution authorization: the request must match the
+            # CURRENT root execution epoch, never a stale one (§12/§13).
+            if not self.execution_epoch_match:
+                blocked.append('execution_epoch_mismatch')
 
         if need_bounded_auto:
             if not self.observation_fresh:
@@ -97,9 +115,17 @@ class RoutePolicy:
             # the gate.
             if not self.auto_confirmed:
                 blocked.append('auto_requires_confirmation')
+            # Auto V1 risk/op allowlist: only low-risk, allowlisted
+            # operations may ever auto-apply; the root executor re-evaluates
+            # this independently (§19).
+            if not self.risk_auto_eligible:
+                blocked.append('auto_risk_not_eligible')
+            if not self.auto_allowlisted_op:
+                blocked.append('auto_op_not_allowlisted')
 
         plan_gates_ok = (self.plan_valid and self.plan_not_expired
-                         and self.generation_match and self.config_hash_match)
+                         and self.generation_match and self.config_hash_match
+                         and self.execution_epoch_match)
         can_plan = (health_ready and not self.recovery_required
                     and self.observation_integrity_valid
                     and self.timeline_integrity_valid)
@@ -113,7 +139,9 @@ class RoutePolicy:
                          and self.fusible_open
                          and self.rate_limit_ok
                          and self.cooldown_ok
-                         and self.auto_confirmed)
+                         and self.auto_confirmed
+                         and self.risk_auto_eligible
+                         and self.auto_allowlisted_op)
 
         can_manual_approve = manual_gates_ok
         can_manual_apply = manual_gates_ok

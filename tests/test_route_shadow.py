@@ -96,11 +96,17 @@ class ShadowPlanningTest(unittest.TestCase):
             self.assertIn('feature_not_released', d['blockedBy'])
 
     def test_open_gate_shadow_would_apply_matches_actual(self):
-        # When the gate is open, shadowWouldApply must be consistent with
-        # actual auto eligibility.
+        # When the gate is open AND every auto authorization gate is green,
+        # shadowWouldApply must be consistent with actual auto eligibility.
         with tempfile.TemporaryDirectory() as td:
             caps = open_caps(td)
-            d = policy(caps, configured_stage='auto').evaluate()
+            d = policy(caps, configured_stage='auto',
+                       plan_valid=True, plan_not_expired=True,
+                       generation_match=True, config_hash_match=True,
+                       execution_epoch_match=True,
+                       fusible_open=True, rate_limit_ok=True, cooldown_ok=True,
+                       auto_confirmed=True, risk_auto_eligible=True,
+                       auto_allowlisted_op=True).evaluate()
             self.assertTrue(d['canAutoApply'])
             self.assertTrue(d['shadowWouldApply'])
 

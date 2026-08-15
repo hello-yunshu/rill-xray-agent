@@ -16,6 +16,7 @@ from pathlib import Path
 from rill_xray_agent.canonical import atomic_write_json, file_sha256
 from rill_xray_agent.errors import ContractError
 from rill_xray_agent.release_capabilities import ReleaseCapabilities
+from rill_xray_agent.root_policy import RootExecutionPolicy
 from rill_xray_agent.route_executor import (
     MAX_REQUEST_BYTES, RouteExecutor, RouteMutationCompiler,
     request_digest, validate_apply_request)
@@ -35,7 +36,8 @@ def managed_config_bytes():
     }, sort_keys=True, separators=(',', ':')).encode()
 
 
-def make_executor(td, released=False, xray_ok=True, **kw):
+def make_executor(td, released=False, xray_ok=True, root_mode='normal',
+                  root_stage='assist', **kw):
     state_root = Path(td) / 'state'
     txn_root = Path(td) / 'tx'
     spool = Path(td) / 'spool'
@@ -52,10 +54,22 @@ def make_executor(td, released=False, xray_ok=True, **kw):
         caps = caps.with_released('routeAssist', True)
         caps = caps.with_released('boundedAuto', True)
 
+    # Root-authoritative execution policy: the executor re-reads mode/stage/
+    # epoch from this, never from the request. Configure it to the state the
+    # test wants (default: normal + assist so manual applies can proceed).
+    root_dir = Path(td) / 'root'
+    rp = RootExecutionPolicy(root_dir=root_dir)
+    if rp.mode() != root_mode:
+        rp.set_mode(root_mode)
+    if rp.route_stage() != root_stage:
+        rp.set_route_stage(root_stage)
+
     ex = RouteExecutor(state_root, txn_root, spool_dir=spool,
                        release_capabilities=caps,
                        managed_config_path=mcp, xray_bin=xray_bin,
-                       allowed_producer_uids=[os.geteuid()])
+                       allowed_producer_uids=[os.geteuid()],
+                       root_policy=rp,
+                       projection_path=Path(td) / 'proj' / 'execution-policy.json')
     return ex, mcp, spool
 
 
@@ -64,13 +78,17 @@ def base_request(ex, mcp, **kw):
             'params': {'position': 1, 'selectorType': 'domain',
                        'selectorValue': ['new.example.com'], 'outboundTag': 'proxy'}}]
     req = {
-        'schemaVersion': 1,
+        'schemaVersion': 2,
         'recommendationId': 'rec-route-test-0001',
         'createdAtEpochSeconds': 1000,
         'expiresAtEpochSeconds': 9999999999,
         'configurationGeneration': ex.txn.generation(),
+        'executionEpoch': ex.root_policy.execution_epoch(),
         'sourceConfigSha256': file_sha256(mcp),
         'planSha256': 'aa' * 32,
+        'recommendationType': 'no-recommendation',
+        'semanticFingerprint': 'rec-route-test-0001',
+        'policySnapshotDigest': 'bb' * 32,
         'applyType': 'manual',
         'mode': 'normal',
         'effectiveStage': 'assist',
@@ -100,9 +118,29 @@ class ApplyRequestValidationTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             ex, mcp, _ = make_executor(td)
             req = base_request(ex, mcp)
-            req['schemaVersion'] = 2
+            req['schemaVersion'] = 3
             with self.assertRaises(ContractError):
                 validate_apply_request(req)
+
+    def test_epoch_binding_fields_fail_closed(self):
+        # §12/§24: executionEpoch / recommendationType / semanticFingerprint /
+        # policySnapshotDigest must be strictly validated.
+        with tempfile.TemporaryDirectory() as td:
+            ex, mcp, _ = make_executor(td)
+            for mutate in (
+                {'executionEpoch': -1},
+                {'executionEpoch': True},
+                {'executionEpoch': '9'},
+                {'recommendationType': 'not-a-real-type'},
+                {'recommendationType': 7},
+                {'semanticFingerprint': 'bad fp with spaces'},
+                {'semanticFingerprint': 'a' * 200},
+                {'policySnapshotDigest': 'zz' * 32},
+                {'policySnapshotDigest': None},
+            ):
+                req = base_request(ex, mcp, **mutate)
+                with self.assertRaises(ContractError):
+                    validate_apply_request(req)
 
     def test_oversized_request_rejected(self):
         with tempfile.TemporaryDirectory() as td:

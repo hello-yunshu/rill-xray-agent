@@ -51,7 +51,7 @@ class TopologyProjectionTest(unittest.TestCase):
 
     def test_projection_shape(self):
         p = self._project()
-        self.assertEqual(p['schemaVersion'], 1)
+        self.assertEqual(p['schemaVersion'], 2)
         self.assertEqual(p['configGeneration'], 3)
         self.assertEqual(p['routingRulesCount'], 4)
         self.assertEqual(len(p['rules']), 4)
@@ -70,9 +70,10 @@ class TopologyProjectionTest(unittest.TestCase):
     def test_rule_entries_are_metadata_only(self):
         p = self._project()
         for rule in p['rules']:
-            self.assertEqual(set(rule), {'ruleIndex', 'ruleKind', 'selectorType',
-                                         'selectorDigest', 'outboundTag', 'isManaged',
-                                         'hasCatchAll', 'position'})
+            self.assertEqual(set(rule), {'ruleIndex', 'ruleKind',
+                                         'selectorTypes', 'selectorDigests',
+                                         'predicateDigest', 'outboundTag',
+                                         'isManaged', 'hasCatchAll', 'position'})
             self.assertNotIn('domain', rule)
             self.assertNotIn('ip', rule)
             self.assertNotIn('privateKey', rule)
@@ -80,9 +81,44 @@ class TopologyProjectionTest(unittest.TestCase):
     def test_selector_value_is_digested(self):
         p = self._project()
         rule0 = p['rules'][0]
-        self.assertEqual(rule0['selectorType'], 'domain')
-        self.assertNotIn('example.com', rule0['selectorDigest'])
-        self.assertEqual(len(rule0['selectorDigest']), 64)  # sha256 hex
+        self.assertEqual(rule0['selectorTypes'], ['domain'])
+        self.assertNotIn('example.com', rule0['selectorDigests']['domain'])
+        self.assertEqual(len(rule0['selectorDigests']['domain']), 64)  # sha256 hex
+        self.assertEqual(len(rule0['predicateDigest']), 64)
+
+    def test_multi_selector_predicate(self):
+        # A rule with multiple selectors must record ALL of them (§10).
+        p = RouteTopologyProjection({'rules': [
+            {'type': 'field', 'domain': ['example.com'], 'port': '443',
+             'inboundTag': ['foo'], 'outboundTag': 'proxy'},
+        ]}).project()
+        rule = p['rules'][0]
+        self.assertEqual(rule['selectorTypes'], ['domain', 'port', 'inboundTag'])
+        self.assertEqual(set(rule['selectorDigests']),
+                         {'domain', 'port', 'inboundTag'})
+        for field in ('domain', 'port', 'inboundTag'):
+            self.assertEqual(len(rule['selectorDigests'][field]), 64)
+        self.assertEqual(len(rule['predicateDigest']), 64)
+
+    def test_multi_selector_not_shadowed_by_single_selector(self):
+        # Full-predicate comparison: a single-selector rule must NOT shadow a
+        # rule that additionally constrains by port.
+        single = RouteTopologyProjection({'rules': [
+            {'type': 'field', 'domain': ['example.com'], 'outboundTag': 'a'},
+            {'type': 'field', 'domain': ['example.com'], 'port': '443',
+             'outboundTag': 'b'},
+        ]}).unreachable_rules()
+        self.assertEqual(single, {})
+
+    def test_multi_selector_exact_duplicate_shadowed(self):
+        dup = RouteTopologyProjection({'rules': [
+            {'type': 'field', 'domain': ['example.com'], 'port': '443',
+             'outboundTag': 'a'},
+            {'type': 'field', 'port': '443', 'domain': ['example.com'],
+             'outboundTag': 'b'},
+        ]}).unreachable_rules()
+        # Same full predicate (order of fields normalised) -> shadowed.
+        self.assertIn(1, dup)
 
     def test_managed_ownership_detection(self):
         p = self._project()
@@ -138,7 +174,8 @@ class TopologyProjectionTest(unittest.TestCase):
         blob = repr(p)
         for token in ('privateKey', 'shortId', '6KzhM9OB', 'abcdef0123456789'):
             self.assertNotIn(token, blob)
-        self.assertEqual(p['rules'][0]['selectorType'], 'protocol')
+        self.assertEqual(p['rules'][0]['selectorTypes'], ['protocol'])
+        self.assertEqual(len(p['rules'][0]['selectorDigests']['protocol']), 64)
 
     def test_vless_url_never_persisted(self):
         p = RouteTopologyProjection({'rules': [VLESS_RULE]}).project()

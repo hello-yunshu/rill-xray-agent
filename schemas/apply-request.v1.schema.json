@@ -2,23 +2,37 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "apply-request.v1.schema.json",
   "title": "Route Apply Request",
-  "description": "Root-executor input. The executor re-validates the whole envelope against the CURRENT release manifest and the CURRENT managed config digest/generation; nothing in the request is trusted by itself.",
+  "description": "Root-executor input (schemaVersion 2). The executor re-validates the whole envelope against the CURRENT release manifest, the CURRENT managed config digest/generation AND the CURRENT root execution policy/epoch; nothing in the request is trusted by itself. executionEpoch / policySnapshotDigest bind the request to the root-authoritative authorization state (§12/§24).",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schemaVersion", "recommendationId", "createdAtEpochSeconds",
-    "expiresAtEpochSeconds", "configurationGeneration", "sourceConfigSha256",
-    "planSha256", "applyType", "mode", "effectiveStage",
-    "releaseSnapshot", "operations", "requestSha256"
+    "expiresAtEpochSeconds", "configurationGeneration", "executionEpoch",
+    "sourceConfigSha256", "planSha256", "recommendationType",
+    "semanticFingerprint", "policySnapshotDigest", "applyType", "mode",
+    "effectiveStage", "releaseSnapshot", "operations", "requestSha256"
   ],
   "properties": {
-    "schemaVersion": {"type": "integer", "enum": [1]},
+    "schemaVersion": {"type": "integer", "enum": [2]},
     "recommendationId": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"},
     "createdAtEpochSeconds": {"type": "integer"},
     "expiresAtEpochSeconds": {"type": "integer"},
     "configurationGeneration": {"type": "integer", "minimum": 0},
+    "executionEpoch": {"type": "integer", "minimum": 0},
     "sourceConfigSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "planSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "recommendationType": {
+      "type": "string",
+      "enum": [
+        "managed-rule-shadowed",
+        "unreachable-rule",
+        "managed-rule-added",
+        "stale-topology",
+        "no-recommendation"
+      ]
+    },
+    "semanticFingerprint": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"},
+    "policySnapshotDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "applyType": {"type": "string", "enum": ["manual", "auto"]},
     "mode": {"type": "string", "enum": ["normal", "observe-only", "safe-disabled"]},
     "effectiveStage": {"type": "string", "enum": ["observe", "assist", "auto", "disabled"]},

@@ -2,23 +2,9 @@ import hashlib
 import time
 import uuid
 from .canonical import canonical_bytes, digest
-
-ALLOWED_OPS = {
-    'routingRule.insert',
-    'routingRule.removeManaged',
-    'routingRule.replaceManaged',
-    'routingRule.moveManaged',
-}
-OP_PARAM_KEYS = {
-    'routingRule.insert': {'position', 'selectorType', 'selectorValue', 'outboundTag'},
-    'routingRule.removeManaged': {'ruleIndex'},
-    'routingRule.replaceManaged': {'ruleIndex', 'selectorType', 'selectorValue', 'outboundTag'},
-    'routingRule.moveManaged': {'fromIndex', 'toIndex'},
-}
-INDEX_KEYS = {'position', 'ruleIndex', 'fromIndex', 'toIndex'}
-SAFE_CHARS = frozenset(
-    'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_:,/@+')
-RISK_RANK = {'low': 0, 'medium': 1, 'high': 2}
+from .route_contract import (ALLOWED_OPS, INDEX_KEYS, OP_PARAM_KEYS, SAFE_CHARS,
+                             op_risk, overall_risk)
+from .route_analyzer import RouteAnalyzer
 
 
 def plan_digest(plan):
@@ -70,12 +56,6 @@ class RoutePlanner:
         rules = self._routing.get('rules')
         return rules if isinstance(rules, list) else []
 
-    def _rule_at(self, index):
-        rules = self._rules()
-        if 0 <= index < len(rules) and isinstance(rules[index], dict):
-            return rules[index]
-        return None
-
     @staticmethod
     def _safe_string(value):
         if not isinstance(value, str) or not value:
@@ -93,6 +73,36 @@ class RoutePlanner:
         non-managed operation. The resulting list is byte-stable so the digest
         is comparable across Runtime / CLI / executor."""
         return [RoutePlanner._canonical_operation(op) for op in (operations or [])]
+
+    def operations_from_recommendation(self, recommendation):
+        """Deterministic mapping: recommendationType -> typed operations.
+
+        Only recommendation types understood by the contract produce
+        operations; anything else yields an empty plan (no-op, shadow-only).
+        The planner never lets the analyzer emit arbitrary operations; the
+        mapping below is the only bridge, and every op is re-validated through
+        the route contract.
+        """
+        if not isinstance(recommendation, dict):
+            raise ValueError('recommendation must be an object')
+        rtype = recommendation.get('recommendationType')
+        if rtype not in RouteAnalyzer.RECOMMENDATION_TYPES:
+            raise ValueError('unknown recommendationType')
+        if rtype == 'managed-rule-shadowed':
+            # A Rill-managed rule is exactly shadowed by an earlier rule. The
+            # safe, typed fix is to REPLACE the managed rule's predicate so it
+            # is no longer shadowed. The exact replacement selector is a
+            # human-supplied parameter; the analyzer only records the
+            # situation, so no operations are synthesized here.
+            return []
+        if rtype == 'unreachable-rule':
+            return []
+        if rtype == 'managed-rule-added':
+            # Placeholder: v1 does not synthesize an add; a human supplies the
+            # selector explicitly.
+            return []
+        # no-recommendation / stale-topology: nothing to do.
+        return []
 
     @staticmethod
     def _canonical_operation(op):
@@ -125,27 +135,10 @@ class RoutePlanner:
         return {'op': opname, 'params': clean, 'managedScope': True}
 
     def _op_risk(self, op):
-        opname = op['op']
-        params = op['params']
-        if opname == 'routingRule.insert':
-            position = params.get('position')
-            count = len(self._rules())
-            return 'low' if position >= (count - 1) else 'medium'
-        if opname == 'routingRule.removeManaged':
-            return 'low'
-        if opname == 'routingRule.replaceManaged':
-            current = self._rule_at(params.get('ruleIndex'))
-            if current and current.get('selectorType') == params.get('selectorType'):
-                return 'low'
-            return 'medium'
-        if opname == 'routingRule.moveManaged':
-            return 'low'
-        return 'high'
+        return op_risk(op, self._rules())
 
     def _overall_risk(self, ops):
-        if not ops:
-            return 'low'
-        return max((self._op_risk(o) for o in ops), key=RISK_RANK.get)
+        return overall_risk(ops, self._rules())
 
     def _reason_code(self, ops):
         if not ops:
@@ -178,12 +171,23 @@ class RoutePlanner:
         steps.append('managed-rule-set-consistent')
         return steps
 
-    def plan(self, operations=None, now=None):
+    def plan(self, operations=None, now=None, recommendation=None, recommendation_id=None):
         ops = [self._canonical_operation(o) for o in (operations or [])]
         created = int(now if now is not None else time.time())
+        # The recommendationId is a SEMANTIC fingerprint when a recommendation
+        # is available (stable across re-captures of the same situation); the
+        # deterministic topology+operations id is the fallback so the 30-minute
+        # same-recommendation cooldown stays meaningful (§22).
+        rid = recommendation_id or RoutePlanner.deterministic_id(self.topology, ops)
+        if recommendation is not None:
+            rec = recommendation if isinstance(recommendation, dict) else {}
+            fingerprint = rec.get('semanticFingerprint')
+            if fingerprint:
+                rid = fingerprint
         plan = {
             'schemaVersion': 1,
-            'recommendationId': RoutePlanner.deterministic_id(self.topology, ops),
+            'recommendationId': rid,
+            'semanticFingerprint': rid,
             'createdAtEpochSeconds': created,
             'expiresAtEpochSeconds': created + self.ttl_seconds,
             'configurationGeneration': self.configuration_generation,
@@ -197,5 +201,16 @@ class RoutePlanner:
             'managedScopeOnly': True,
             'planSha256': '',
         }
+        if recommendation is not None:
+            # The semantic fingerprint (§22) excludes capture timing: it binds
+            # normalized topology semantics + recommendation type + operation
+            # semantics + config generation/hash, so the same situation keeps
+            # the SAME fingerprint (and the same-recommendation cooldown stays
+            # meaningful across re-captures).
+            plan['recommendationType'] = recommendation.get('recommendationType')
+            plan['evidenceDigest'] = recommendation.get('evidenceDigest')
+            fingerprint = recommendation.get('semanticFingerprint')
+            if fingerprint:
+                plan['semanticFingerprint'] = fingerprint
         plan['planSha256'] = plan_digest(plan)
         return plan

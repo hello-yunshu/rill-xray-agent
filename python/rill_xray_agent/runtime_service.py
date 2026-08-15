@@ -19,6 +19,7 @@ from .route_topology import RouteTopologyProjection
 from .route_planner import RoutePlanner
 from .route_executor import request_digest
 from .auto_policy import AutoPolicy
+from .root_policy import DEFAULT_PROJECTION_PATH
 from .errors import UnknownDecisionError
 from .doctor import Doctor
 
@@ -75,7 +76,8 @@ class RuntimeService:
                  ledger_max_bytes=None, replay_protection_seconds=21600,
                  default_uid=None, observation_path=None, timeline_dir=None,
                  release_capabilities=None, auto_policy_path=None,
-                 route_history_path=None, apply_spool_dir=None):
+                 route_history_path=None, apply_spool_dir=None,
+                 root_policy_projection_path=None):
         self.state_root = Path(state_root)
         self.state_root.mkdir(parents=True, exist_ok=True)
         self.txn_root = Path(txn_root)
@@ -125,6 +127,12 @@ class RuntimeService:
         # the root-owned oneshot consumes it. In the locked production release
         # this is never written (routeApprove fails closed before this point).
         self.apply_spool_dir = Path(apply_spool_dir or '/var/spool/rill-xray-agent-apply')
+        # Root-authoritative execution-policy projection (§12/§13/§16):
+        # root-writable, runtime-READ-ONLY. The Runtime binds the CURRENT epoch
+        # + policy snapshot digest into ApplyRequests and displays live status;
+        # it never derives or persists execution authority itself.
+        self.root_policy_projection_path = Path(
+            root_policy_projection_path or DEFAULT_PROJECTION_PATH)
         self.queue = BoundedQueue(max_concurrency)
         self.sem = self.queue._sem
         self.access_log = self.state_root / 'access-log.jsonl'
@@ -688,6 +696,25 @@ class RuntimeService:
             return None
         return entry
 
+    def _read_root_policy(self):
+        """Read the root-owned execution-policy projection (READ-ONLY).
+
+        Returns the policy dict, or None on any anomaly (fail closed): a
+        missing / corrupt / unsafe projection means the Runtime cannot bind a
+        valid execution epoch, so no ApplyRequest may be produced. read_json
+        rejects symlinks and non-regular files.
+        """
+        try:
+            data = read_json(self.root_policy_projection_path)
+        except (ValueError, OSError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        policy = data.get('policy')
+        if not isinstance(policy, dict):
+            return None
+        return policy
+
     def _route_approve(self, rid, operations, plan, status, peer_uid):
         """Manual approval contract. Fail-closed when release gate is locked.
 
@@ -713,16 +740,38 @@ class RuntimeService:
         if not status['canManualApply']:
             return self._record_approval(
                 rid, now, plan, applied=False, blocked=status['blockedBy'])
-        # Release gate is open: build an ApplyRequest and write to the spool.
-        # The root-owned oneshot picks it up from there.
+        # Release gate is open: bind the request to the CURRENT root-owned
+        # execution policy (§12/§13). If the root projection is unavailable or
+        # unsafe the Runtime fails closed: it cannot produce a validly-bound
+        # ApplyRequest. The root executor re-validates epoch + snapshot digest
+        # against the live root policy anyway; nothing here is trusted as the
+        # final authority.
+        root_policy = self._read_root_policy()
+        if root_policy is None:
+            return self._record_approval(
+                rid, now, plan, applied=False, blocked=['root_policy_unavailable'])
+        execution_epoch = root_policy.get('executionEpoch')
+        if not isinstance(execution_epoch, int) or isinstance(execution_epoch, bool) \
+                or execution_epoch < 0:
+            return self._record_approval(
+                rid, now, plan, applied=False, blocked=['root_policy_unavailable'])
+        policy_snapshot_digest = root_policy.get('policySnapshotDigest')
+        if not isinstance(policy_snapshot_digest, str) or not policy_snapshot_digest:
+            return self._record_approval(
+                rid, now, plan, applied=False, blocked=['root_policy_unavailable'])
         apply_request = {
-            'schemaVersion': 1,
+            'schemaVersion': 2,
             'recommendationId': rid,
             'createdAtEpochSeconds': now,
             'expiresAtEpochSeconds': now + 300,
             'configurationGeneration': plan.get('configurationGeneration') or 0,
+            'executionEpoch': execution_epoch,
             'sourceConfigSha256': plan.get('sourceConfigSha256', ''),
             'planSha256': plan.get('planSha256', ''),
+            'recommendationType': plan.get('recommendationType') or 'no-recommendation',
+            'semanticFingerprint': (plan.get('semanticFingerprint')
+                                    or plan.get('recommendationId') or rid),
+            'policySnapshotDigest': policy_snapshot_digest,
             'applyType': 'manual',
             'mode': 'normal',
             'effectiveStage': status['effectiveStage'],
@@ -785,6 +834,8 @@ class RuntimeService:
             'autoReachable': auto_reachable,
             'wouldAutoApply': would_auto_apply,
             'shadowBlockedBy': shadow_blocked,
+            'policyIntegrity': policy_snapshot['integrity'],
+            'policyCorruptReason': policy_snapshot['corruptReason'],
             'fuseOpen': policy_snapshot['fuseOpen'],
             'fuseAcknowledged': policy_snapshot['fuseAcknowledged'],
             'consecutiveRollbacks': policy_snapshot['consecutiveRollbacks'],
