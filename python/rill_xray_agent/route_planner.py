@@ -4,7 +4,7 @@ import uuid
 from .canonical import canonical_bytes, digest
 from .route_contract import (ALLOWED_OPS, INDEX_KEYS, OP_PARAM_KEYS, SAFE_CHARS,
                              op_risk, overall_risk)
-from .route_analyzer import RouteAnalyzer
+from .route_analyzer import RECOMMENDATION_TYPES
 
 
 def plan_digest(plan):
@@ -75,34 +75,80 @@ class RoutePlanner:
         return [RoutePlanner._canonical_operation(op) for op in (operations or [])]
 
     def operations_from_recommendation(self, recommendation):
-        """Deterministic mapping: recommendationType -> typed operations.
+        """Deterministic mapping: recommendationType -> (actionable, reason, ops).
 
         Only recommendation types understood by the contract produce
-        operations; anything else yields an empty plan (no-op, shadow-only).
-        The planner never lets the analyzer emit arbitrary operations; the
-        mapping below is the only bridge, and every op is re-validated through
-        the route contract.
+        operations; any situation that cannot be safely turned into a typed,
+        low-risk operation is returned as advisory/manual-only
+        (actionable=False with an explicit reason) instead of a fake
+        "successful" plan with operations=[].
+
+        The planner never lets the analyzer emit arbitrary operations: the
+        mapping below is the only bridge, and every synthesized op is
+        re-validated through the route contract. For the Bounded-Auto restore
+        scenario the analyzer only records the *intent* (Rill-owned managed
+        route state); the planner turns that intent into typed ops here.
         """
         if not isinstance(recommendation, dict):
             raise ValueError('recommendation must be an object')
         rtype = recommendation.get('recommendationType')
-        if rtype not in RouteAnalyzer.RECOMMENDATION_TYPES:
+        if rtype not in RECOMMENDATION_TYPES:
             raise ValueError('unknown recommendationType')
-        if rtype == 'managed-rule-shadowed':
-            # A Rill-managed rule is exactly shadowed by an earlier rule. The
-            # safe, typed fix is to REPLACE the managed rule's predicate so it
-            # is no longer shadowed. The exact replacement selector is a
-            # human-supplied parameter; the analyzer only records the
-            # situation, so no operations are synthesized here.
-            return []
-        if rtype == 'unreachable-rule':
-            return []
+        if rtype == 'managed-route-intent-restore':
+            return self._ops_from_intent(recommendation)
+        # The remaining analyzer observations cannot be turned into a safe
+        # auto/manual operation without a root-authoritative intent: the
+        # analyzer never invents a selector value, so these are advisory-only.
+        if rtype in ('managed-rule-shadowed', 'unreachable-rule'):
+            return (False, 'insufficient-safe-intent', [])
         if rtype == 'managed-rule-added':
-            # Placeholder: v1 does not synthesize an add; a human supplies the
-            # selector explicitly.
-            return []
-        # no-recommendation / stale-topology: nothing to do.
-        return []
+            # A managed rule is present and healthy: status-only, nothing to do.
+            return (False, 'status-only-no-action', [])
+        # no-recommendation / stale-topology: nothing actionable.
+        return (False, 'no-action', [])
+
+    def _ops_from_intent(self, recommendation):
+        """Deterministic typed operations for the root-authoritative managed
+        route intent (§P0-2). Only LOW-RISK, AUTO_ROUTE_OPS operations are
+        produced: insert a missing intent rule, or replace a drifted managed
+        rule's selector/outbound to restore the Rill-owned target state. The
+        intent selector values come from the Rill-owned intent (never from
+        user config secrets). Returns (actionable, reason, ops)."""
+        intent = recommendation.get('intent')
+        if not isinstance(intent, list) or not intent:
+            return (False, 'insufficient-safe-intent', [])
+        ops = []
+        for entry in intent:
+            if not isinstance(entry, dict):
+                continue
+            kind = entry.get('kind')
+            params = {}
+            if kind == 'missing':
+                # Restore a missing Rill-owned managed rule by APPENDING it at
+                # the end of the rule list (never before user rules): the
+                # append position is LOW risk and cannot shadow earlier rules.
+                params = {'position': len(self._rules()),
+                          'selectorType': entry.get('selectorType'),
+                          'selectorValue': entry.get('selectorValue'),
+                          'outboundTag': entry.get('outboundTag')}
+                op = 'routingRule.insert'
+            elif kind == 'drifted':
+                params = {'ruleIndex': entry.get('ruleIndex'),
+                          'selectorType': entry.get('selectorType'),
+                          'selectorValue': entry.get('selectorValue'),
+                          'outboundTag': entry.get('outboundTag')}
+                op = 'routingRule.replaceManaged'
+            else:
+                continue
+            params = {k: v for k, v in params.items() if v is not None}
+            try:
+                ops.append(self._canonical_operation({'op': op, 'params': params}))
+            except ValueError:
+                # Never synthesize an unsafe operation: drop it (advisory-only).
+                continue
+        if not ops:
+            return (False, 'insufficient-safe-intent', [])
+        return (True, 'managed-route-intent-restore', ops)
 
     @staticmethod
     def _canonical_operation(op):

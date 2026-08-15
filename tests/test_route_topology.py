@@ -70,13 +70,26 @@ class TopologyProjectionTest(unittest.TestCase):
     def test_rule_entries_are_metadata_only(self):
         p = self._project()
         for rule in p['rules']:
-            self.assertEqual(set(rule), {'ruleIndex', 'ruleKind',
-                                         'selectorTypes', 'selectorDigests',
-                                         'predicateDigest', 'outboundTag',
-                                         'isManaged', 'hasCatchAll', 'position'})
+            base = {'ruleIndex', 'ruleKind',
+                    'selectorTypes', 'selectorDigests',
+                    'predicateDigest', 'outboundTag',
+                    'isManaged', 'hasCatchAll', 'position'}
+            expected = base | ({'managedId'} if rule['isManaged'] else set())
+            self.assertEqual(set(rule), expected)
             self.assertNotIn('domain', rule)
             self.assertNotIn('ip', rule)
             self.assertNotIn('privateKey', rule)
+
+    def test_managed_rule_has_managed_id(self):
+        # Managed rules expose a secret-free managedId (digest of the tag);
+        # unmanaged rules must NOT carry it.
+        p = self._project()
+        for rule in p['rules']:
+            self.assertEqual('managedId' in rule, rule['isManaged'])
+        managed_ids = [r['managedId'] for r in p['rules'] if r['isManaged']]
+        self.assertEqual(len(managed_ids), 2)
+        self.assertEqual(len(set(managed_ids)), 2)
+        self.assertTrue(all(len(i) == 64 for i in managed_ids))
 
     def test_selector_value_is_digested(self):
         p = self._project()

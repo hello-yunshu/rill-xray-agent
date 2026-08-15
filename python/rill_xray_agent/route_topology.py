@@ -73,6 +73,17 @@ def _selector_value_digest(field, value):
     return digest({'field': field, 'value': material})
 
 
+def selector_value_digest(field, value):
+    """Public alias: the digest of a selector VALUE.
+
+    Shared by the root observer (projection) and the analyzer (managed-route
+    intent drift detection) so both compute the SAME per-field digest for the
+    same selector value. The digest is non-reversible: selector VALUES are
+    never persisted in clear by the projection.
+    """
+    return _selector_value_digest(field, value)
+
+
 def _outbound_tag_digest(value):
     return digest({'outboundTag': value if isinstance(value, str) else ''})
 
@@ -117,7 +128,8 @@ class RouteTopologyProjection:
             'selectorDigests': selectors,
             'outboundTagDigest': _outbound_tag_digest(outbound),
         }
-        return {
+        managed = _managed(rule)
+        safe = {
             'ruleIndex': index,
             'ruleKind': _kind(rule),
             'position': position,
@@ -126,17 +138,30 @@ class RouteTopologyProjection:
             'predicateDigest': digest(predicate),
             'outboundTag': outbound if isinstance(outbound, str) else '',
             'hasCatchAll': not fields,
-            'isManaged': _managed(rule),
+            'isManaged': managed,
         }
+        if managed:
+            # Secret-free managed-rule identity: digest of the Rill-owned tag.
+            # Enables the analyzer to match a root-authoritative intent rule to
+            # its live rule WITHOUT persisting the raw tag in clear.
+            tag = rule.get('tag')
+            safe['managedId'] = digest({'managedTag': tag if isinstance(tag, str) else ''})
+        return safe
 
     def project(self):
         rules = [self._safe_rule(i, r, p)
                  for p, (i, r) in enumerate(enumerate(self._rules))]
         d = self._whole_digest or ''
+        gen = self._generation
         return {
             'schemaVersion': 2,
             'capturedAtEpochSeconds': self._captured_at,
-            'configGeneration': self._generation,
+            # Canonical public field name (P0-7): generation is root-owned
+            # authority. ``configGeneration`` remains ONLY as a deprecated
+            # migration alias for older consumers; new schema never double-writes
+            # both as separate truths.
+            'configurationGeneration': gen,
+            'configGeneration': gen,
             'wholeConfigSha256': d,
             'wholeConfigSafeDigest': d,
             'routingRulesCount': len(self._rules),
