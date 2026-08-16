@@ -101,7 +101,7 @@ def _has_catch_all(rule, fields):
 
 class RouteTopologyProjection:
     def __init__(self, routing, config_generation=0, whole_config_safe_digest=None,
-                 captured_at_epoch_seconds=None):
+                 captured_at_epoch_seconds=None, intent=None):
         self._routing = routing if isinstance(routing, dict) else {}
         self._generation = int(config_generation)
         self._whole_digest = whole_config_safe_digest
@@ -110,6 +110,12 @@ class RouteTopologyProjection:
                              else int(time.time()))
         rules = self._routing.get('rules')
         self._rules = rules if isinstance(rules, list) else []
+        # §P0-2: root-authoritative managed-route intent (Rill-owned desired
+        # managed rule state). The ROOT observer reads the root-owned Rill
+        # config and embeds the sanitized intent here so the unprivileged
+        # Runtime can deterministically derive a low-risk restore plan WITHOUT
+        # reading the raw Xray config and WITHOUT inventing a selector value.
+        self._intent = intent if isinstance(intent, dict) else {}
 
     @staticmethod
     def ownership_marker():
@@ -153,7 +159,7 @@ class RouteTopologyProjection:
                  for p, (i, r) in enumerate(enumerate(self._rules))]
         d = self._whole_digest or ''
         gen = self._generation
-        return {
+        proj = {
             'schemaVersion': 2,
             'capturedAtEpochSeconds': self._captured_at,
             # §P0-7: 'configurationGeneration' is the single canonical public
@@ -166,7 +172,55 @@ class RouteTopologyProjection:
             'wholeConfigSafeDigest': d,
             'routingRulesCount': len(self._rules),
             'rules': rules,
+            # §P0-2: the root-authoritative managed-route intent rides inside
+            # the projection (never read from the raw Xray config by the
+            # Runtime). Empty when the operator defined no Rill-owned managed
+            # rule intent.
+            'managedRouteIntent': {
+                'managedRules': self._sanitized_intent_rules(),
+            },
         }
+        return proj
+
+    def _sanitized_intent_rules(self):
+        """Return the safe, allowlisted managed-route intent rules.
+
+        Only allowlisted selector types and Rill-owned values survive; any
+        entry that could carry secret / credential / unsafe material is
+        dropped so the projection never leaks user config or invents a
+        selector. Secret-bearing selector fields (user/email/source) are
+        never carried by the intent."""
+        rules = self._intent.get('managedRules')
+        if not isinstance(rules, list):
+            return []
+        out = []
+        for entry in rules:
+            if not isinstance(entry, dict):
+                continue
+            tag = entry.get('tag')
+            sel_type = entry.get('selectorType')
+            value = entry.get('selectorValue')
+            outbound = entry.get('outboundTag')
+            if not isinstance(tag, str) or not tag:
+                continue
+            if sel_type not in ('domain', 'ip', 'port', 'network', 'protocol'):
+                continue
+            if not isinstance(outbound, str) or not outbound:
+                continue
+            if isinstance(value, str) and value:
+                safe_value = [value]
+            elif isinstance(value, list) and value \
+                    and all(isinstance(v, str) and v for v in value):
+                safe_value = value
+            else:
+                continue
+            out.append({
+                'tag': tag,
+                'selectorType': sel_type,
+                'selectorValue': safe_value,
+                'outboundTag': outbound,
+            })
+        return out
 
     def unreachable_rules(self):
         """Return {shadowedIndex: shadowingIndex} for rules whose FULL

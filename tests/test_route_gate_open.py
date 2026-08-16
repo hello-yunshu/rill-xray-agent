@@ -62,6 +62,13 @@ ROOT_POLICY = {'policy': {'schemaVersion': 1, 'mode': 'normal',
                           'routeStage': 'assist', 'executionEpoch': 3,
                           'policySnapshotDigest': 'bb' * 32}}
 
+INTENT_RULES = [{'tag': 'rill-managed-bbb222', 'selectorType': 'domain',
+                 'selectorValue': ['another.example.com'], 'outboundTag': 'proxy'}]
+
+ROOT_POLICY_AUTO = {'policy': {'schemaVersion': 1, 'mode': 'normal',
+                               'routeStage': 'auto', 'executionEpoch': 3,
+                               'policySnapshotDigest': 'bb' * 32}}
+
 
 def _envelope(method, body):
     return {'schemaVersion': 3, 'requestId': 'gate-open-1',
@@ -92,7 +99,7 @@ class GateOpenService:
         self.obs_path = td / 'status' / 'xray-observation.json'
         self.obs_path.parent.mkdir(parents=True, exist_ok=True)
         self.obs_path.write_text(json.dumps({
-            'schemaVersion': 1, 'capturedAtEpochSeconds': int(time.time()),
+            'schemaVersion': 1, 'capturedAtEpochSeconds': int(time.time()) - 1,
             'xrayConfig': {'present': True, 'safe': True, 'sha256': 'a' * 64},
             'nginxConfig': {'present': True, 'safe': True, 'treeSha256': 'b' * 64},
             'installConfig': {'present': True, 'safe': True, 'sha256': 'c' * 64},
@@ -128,12 +135,12 @@ class GateOpenService:
         # The root observer's output for the CURRENT root generation.
         self._write_topology()
 
-    def _write_root_policy(self, epoch):
-        policy = dict(ROOT_POLICY)
-        policy['policy']['executionEpoch'] = epoch
-        self.root_proj.write_text(json.dumps(policy, sort_keys=True))
+    def _write_root_policy(self, epoch, policy=None):
+        p = dict(policy or ROOT_POLICY)
+        p['policy']['executionEpoch'] = epoch
+        self.root_proj.write_text(json.dumps(p, sort_keys=True))
 
-    def _write_topology(self, generation=None):
+    def _write_topology(self, generation=None, intent=None):
         """Simulate the ROOT observer: project the root config + generation
         into the secret-free route-topology file the Runtime reads."""
         cfg = json.loads(self.mcp.read_text())
@@ -141,7 +148,8 @@ class GateOpenService:
         proj = RouteTopologyProjection(
             cfg.get('routing') or {},
             config_generation=gen,
-            whole_config_safe_digest=file_sha256(self.mcp)).project()
+            whole_config_safe_digest=file_sha256(self.mcp),
+            intent=intent).project()
         self.topology_path.write_text(json.dumps(proj, sort_keys=True))
 
     def enable_route_assist(self):
@@ -151,6 +159,26 @@ class GateOpenService:
             out = self.svc.handle(_envelope(method, body), peer_uid=self.uid)
             if not out['ok']:
                 raise AssertionError(f'{method} failed: {out}')
+
+    def enable_auto_mode(self):
+        """Privileged transitions to auto mode: mode=normal + routeStage=auto
+        + explicit root auto confirmation."""
+        for method, body in (('mode', {'mode': 'normal'}),
+                             ('routeStage', {'stage': 'auto'})):
+            out = self.svc.handle(_envelope(method, body), peer_uid=self.uid)
+            if not out['ok']:
+                raise AssertionError(f'{method} failed: {out}')
+        # Root-owned policy projection must reflect routeStage=auto so the
+        # Runtime binds the current epoch / policy snapshot digest correctly.
+        self._write_root_policy(epoch=3, policy=ROOT_POLICY_AUTO)
+        out = self.svc.handle(_envelope('autoConfirm', {}), peer_uid=self.uid)
+        if not out['ok']:
+            raise AssertionError(f'autoConfirm failed: {out}')
+
+    def auto_produce(self, intent=None):
+        """Run the real Bounded-Auto producer against the current projection."""
+        self._write_topology(intent=intent)
+        return self.svc.handle(_envelope('autoProduce', {}), peer_uid=self.uid)
 
     def plan(self, operations=None):
         out = self.svc.handle(_envelope('routePlan', {'operations': operations or OPS}),
@@ -357,6 +385,89 @@ class RouteGateOpenManualApplyTest(unittest.TestCase):
         for token in ('RILL_MANAGED_CONFIG', forbidden,
                       '/etc/rill-xray-agent/host'):
             self.assertNotIn(token, src)
+
+
+class RouteAutoProducerTest(unittest.TestCase):
+    """§P0-2/§P0-12 + §19 #15: the REAL Bounded-Auto producer.
+
+    Analyzer (managed-route intent) -> Planner (typed low-risk ops) ->
+    auto policy concrete eval -> ApplyRequest(applyType=auto) -> spool.
+    The root executor then independently recomputes everything and commits,
+    writing the root auto ledger record (record_apply). In the locked release
+    the producer fails closed (feature_not_released) and never writes spool.
+    """
+
+    @contextlib.contextmanager
+    def _ctx(self, **kw):
+        td = tempfile.TemporaryDirectory()
+        s = GateOpenService(td.name, **kw)
+        try:
+            yield s
+        finally:
+            td.cleanup()
+
+    def test_auto_producer_produces_apply_type_auto(self):
+        # §19 #15 gate-open auto E2E (producer half): a missing managed-route
+        # intent rule yields an auto ApplyRequest in the spool.
+        with self._ctx() as s:
+            s.enable_auto_mode()
+            out = s.auto_produce(intent={'managedRules': INTENT_RULES})
+            self.assertTrue(out['ok'], out)
+            res = out['result']
+            self.assertTrue(res['applied'], res)
+            self.assertTrue(res['releaseGateOpen'], res)
+            self.assertEqual(res['blockedBy'], [])
+            req = s.read_apply_request()
+            self.assertIsNotNone(req, 'apply.json must exist after autoProduce')
+            self.assertEqual(req['applyType'], 'auto')
+            self.assertEqual(req['schemaVersion'], 2)
+            self.assertEqual(req['executionEpoch'], 3)
+            self.assertEqual(req['policySnapshotDigest'], 'bb' * 32)
+            self.assertEqual(req['effectiveStage'], 'auto')
+            # The plan comes from the analyzer + planner, never caller ops.
+            self.assertEqual(req['recommendationType'],
+                             'managed-route-intent-restore')
+            self.assertTrue(req['operations'])
+            self.assertEqual(req['operations'][0]['op'], 'routingRule.insert')
+
+    def test_auto_producer_without_intent_no_spool(self):
+        # No managed-route intent -> analyzer says no-action -> no request.
+        with self._ctx() as s:
+            s.enable_auto_mode()
+            out = s.auto_produce()
+            self.assertTrue(out['ok'], out)
+            res = out['result']
+            self.assertFalse(res['produced'], res)
+            self.assertIsNone(s.read_apply_request())
+
+    def test_auto_producer_locked_release_fails_closed(self):
+        # Locked production release: the producer must fail closed with
+        # feature_not_released and never write the spool, even in auto mode.
+        with self._ctx(released=False) as s:
+            s.enable_auto_mode()
+            out = s.auto_produce(intent={'managedRules': INTENT_RULES})
+            self.assertTrue(out['ok'], out)
+            res = out['result']
+            self.assertFalse(res['applied'], res)
+            self.assertIn('feature_not_released', res['blockedBy'])
+            self.assertIsNone(s.read_apply_request())
+
+    def test_auto_producer_requires_confirmation(self):
+        # §19 #14: without explicit autoConfirm, auto must not produce
+        # (auto_requires_confirmation). This is the "resume requires
+        # re-confirmation" invariant at the producer.
+        with self._ctx() as s:
+            for method, body in (('mode', {'mode': 'normal'}),
+                                 ('routeStage', {'stage': 'auto'})):
+                out = s.svc.handle(_envelope(method, body), peer_uid=s.uid)
+                self.assertTrue(out['ok'], out)
+            s._write_root_policy(epoch=3, policy=ROOT_POLICY_AUTO)
+            out = s.auto_produce(intent={'managedRules': INTENT_RULES})
+            self.assertTrue(out['ok'], out)
+            res = out['result']
+            self.assertFalse(res['applied'], res)
+            self.assertIn('auto_requires_confirmation', res['blockedBy'])
+            self.assertIsNone(s.read_apply_request())
 
 
 if __name__ == '__main__':

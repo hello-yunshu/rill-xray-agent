@@ -40,6 +40,12 @@ except ImportError as exc:  # pragma: no cover - fail closed, never drift
     raise SystemExit(f"rill_xray_agent canonical modules unavailable: {exc}")
 
 ROOT = Path(os.environ.get("RILL_XRAY_HOST_ROOT", "/etc/idleleo"))
+# §P0-2: the root-authoritative Rill config (mode/routeStage/managed-route
+# intent). Root-owned 0640; only the ROOT observer reads it and embeds a
+# SANITIZED managed-route intent into the safe topology projection so the
+# unprivileged Runtime never touches this file directly.
+RILL_CONFIG = Path(os.environ.get(
+    "RILL_XRAY_AGENT_RUNTIME_CONFIG", "/etc/rill-xray-agent/config.json"))
 OUT = Path(os.environ.get("RILL_XRAY_AGENT_OUTPUT", "/var/lib/rill-xray-agent-xray/status/xray-observation.json"))
 # §P0-4: the safe, secret-free route-topology projection. The ROOT observer
 # produces it from the root-owned config + the root-owned generation file; the
@@ -145,14 +151,37 @@ def read_generation() -> int:
         return 0
 
 
-def route_topology_projection() -> dict:
-    """Safe, secret-free route-topology projection (§P0-4).
+def read_managed_route_intent() -> dict:
+    """§P0-2: read the root-authoritative managed-route intent.
 
-    Reads the ROOT-owned Xray config (never visible to the Runtime) and the
-    root-owned generation file, then emits RouteTopologyProjection.project().
-    Selector values are persisted only as digests; UUID / privateKey / Reality
-    material / proxy URLs / credentials never appear. A missing or unparseable
-    config produces an EMPTY projection (fail closed), never a partial leak.
+    The Rill config is root-owned (0640); only the ROOT observer reads it.
+    The intent is extracted from the 'managedRouteIntent' block and then
+    re-sanitized inside RouteTopologyProjection (allowlisted selector types,
+    safe scalar/list values, secret-bearing selectors dropped). Any missing /
+    unparseable / malformed intent fails closed to an empty intent so the
+    projection never leaks or invents state.
+    """
+    if not RILL_CONFIG.is_file() or RILL_CONFIG.is_symlink():
+        return {}
+    try:
+        raw = json.loads(RILL_CONFIG.read_text())
+    except Exception:
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    intent = raw.get("managedRouteIntent")
+    return intent if isinstance(intent, dict) else {}
+
+
+def route_topology_projection() -> dict:
+    """Safe, secret-free route-topology projection (§P0-4/§P0-2).
+
+    Reads the ROOT-owned Xray config (never visible to the Runtime), the
+    root-owned generation file and the root-owned managed-route intent, then
+    emits RouteTopologyProjection.project(). Selector values are persisted only
+    as digests; UUID / privateKey / Reality material / proxy URLs / credentials
+    never appear. A missing or unparseable config produces an EMPTY projection
+    (fail closed), never a partial leak.
     """
     routing = None
     whole_digest = ""
@@ -169,6 +198,7 @@ def route_topology_projection() -> dict:
         config_generation=read_generation(),
         whole_config_safe_digest=whole_digest,
         captured_at_epoch_seconds=int(time.time()),
+        intent=read_managed_route_intent(),
     ).project()
 
 

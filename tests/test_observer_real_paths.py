@@ -181,8 +181,19 @@ class Tests(unittest.TestCase):
         self.assertIn("/var/lib/rill-xray-agent-xray", ro_line)
 
     def test_core_never_mentions_host_identity(self):
+        # §P0-5: the executor's DEFAULT_MANAGED_CONFIG_PATH is the SINGLE
+        # required host contract (/etc/<host>/conf/xray/config.json, where
+        # <host> is the fork identity) and must be present verbatim. No OTHER
+        # core module may hardcode the fork identity — a stray mention would
+        # indicate a second live truth or an accidental host lock-in, which
+        # this test continues to forbid.
         token = "i" + "d" + "l" + "e" + "l" + "e" + "o"
+        host_contract = "/etc/" + token + "/conf/xray/config.json"
+        executor = ROOT / "python/rill_xray_agent/route_executor.py"
+        self.assertIn(host_contract, executor.read_text(errors="ignore"))
         for path in (ROOT / "python/rill_xray_agent").glob("*.py"):
+            if path == executor:
+                continue
             self.assertNotIn(token, path.read_text(errors="ignore").lower(), str(path))
 
     def test_manager_has_transaction_helpers(self):

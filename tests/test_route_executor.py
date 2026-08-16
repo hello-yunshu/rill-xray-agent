@@ -457,6 +457,108 @@ class RouteExecutorSecurityTest(unittest.TestCase):
             result = ex.apply()
             self.assertEqual(result['status'], 'blocked')
 
+    # ---- P0-11: boot/crash-safe spool state machine --------------------
+    def test_reboot_recover_committed_claim(self):
+        """A leftover apply.claim from a committed transaction is recovered
+        after reboot, reported, settled to done, and never double-applied."""
+        with tempfile.TemporaryDirectory() as td:
+            ex, mcp, spool = make_executor(td, released=True)
+            req = base_request(ex, mcp)
+            stage_request(ex, spool, req)
+            first = ex.apply()
+            self.assertEqual(first['status'], 'committed')
+            self.assertEqual(ex.txn.generation(), 1)
+            # Simulate a crash/reboot that left the claim in place after the
+            # transaction committed: re-stage the same request as apply.claim.
+            atomic_write_json(spool / 'apply.claim', req, 0o640)
+            recovered = ex.apply()
+            self.assertEqual(recovered['status'], 'committed', recovered)
+            self.assertEqual(recovered['recommendationId'], req['recommendationId'])
+            # Claim was settled to a done marker; nothing pending remains.
+            self.assertFalse((spool / 'apply.claim').exists())
+            self.assertTrue((spool / 'apply.done').is_file())
+            # No double apply: the managed config still has exactly one more
+            # rule than the original, generation unchanged.
+            cfg = json.loads(mcp.read_text())
+            self.assertEqual(len(cfg['routing']['rules']), 3)
+            self.assertEqual(ex.txn.generation(), 1)
+            # A subsequent boot run is a no-op (blocked, nothing pending).
+            self.assertEqual(ex.apply()['status'], 'blocked')
+
+    def test_reboot_recover_claim_then_process_new_request(self):
+        """Executor startup order (P0-11): recover the interrupted claim
+        first, then claim and process a new request in the same run."""
+        with tempfile.TemporaryDirectory() as td:
+            ex, mcp, spool = make_executor(td, released=True)
+            req_a = base_request(ex, mcp, recommendationId='rec-route-a0001')
+            stage_request(ex, spool, req_a)
+            first = ex.apply()
+            self.assertEqual(first['status'], 'committed')
+            # Leftover claim for A (committed) + a fresh pending request B.
+            atomic_write_json(spool / 'apply.claim', req_a, 0o640)
+            req_b = base_request(ex, mcp, recommendationId='rec-route-b0002')
+            stage_request(ex, spool, req_b)
+            result = ex.apply()
+            # The returned outcome is the NEW request's; the recovered claim
+            # was settled durably before B was processed.
+            self.assertEqual(result['status'], 'committed', result)
+            self.assertEqual(result['recommendationId'], 'rec-route-b0002')
+            self.assertFalse((spool / 'apply.claim').exists())
+            cfg = json.loads(mcp.read_text())
+            self.assertEqual(len(cfg['routing']['rules']), 4)
+            self.assertEqual(ex.txn.generation(), 2)
+
+    def test_leftover_claim_without_txn_quarantined(self):
+        """A claim left after a crash before any transaction started is
+        quarantined (never silently discarded, never re-executed in a loop)."""
+        with tempfile.TemporaryDirectory() as td:
+            ex, mcp, spool = make_executor(td, released=True)
+            req = base_request(ex, mcp)
+            stage_request(ex, spool, req)
+            before = file_sha256(mcp)
+            # Simulate a crash right after claim (rename), before the txn began.
+            os.replace(spool / 'apply.json', spool / 'apply.claim')
+            result = ex.apply()
+            self.assertEqual(result['status'], 'blocked')
+            self.assertIn('apply_in_progress', result['blockedBy'])
+            # The claim was preserved under quarantine, not dropped.
+            quarantined = list((spool / 'quarantine').glob('*'))
+            self.assertEqual(len(quarantined), 1)
+            self.assertIn('claim-unrecoverable', quarantined[0].name)
+            # No host mutation happened.
+            self.assertEqual(file_sha256(mcp), before)
+            self.assertFalse((spool / 'apply.claim').exists())
+
+    def test_rejected_request_quarantined(self):
+        """A claimed request that fails validation is quarantined (no silent
+        discard) and not marked as done."""
+        with tempfile.TemporaryDirectory() as td:
+            ex, mcp, spool = make_executor(td, released=True)
+            req = base_request(ex, mcp, expiresAtEpochSeconds=1)
+            stage_request(ex, spool, req)
+            result = ex.apply()
+            self.assertEqual(result['status'], 'rejected')
+            quarantined = list((spool / 'quarantine').glob('*'))
+            self.assertEqual(len(quarantined), 1)
+            self.assertIn('rejected', quarantined[0].name)
+            self.assertFalse((spool / 'apply.done').exists())
+            self.assertFalse((spool / 'apply.claim').exists())
+
+    def test_claim_symlink_quarantined(self):
+        """A symlink apply.claim is an anomaly: quarantined, never processed."""
+        with tempfile.TemporaryDirectory() as td:
+            ex, mcp, spool = make_executor(td, released=True)
+            target = Path(td) / 'outside.json'
+            target.write_bytes(b'{}')
+            os.symlink(target, spool / 'apply.claim')
+            result = ex.apply()
+            # Symlink claim moved away; nothing pending remains.
+            quarantined = list((spool / 'quarantine').glob('*'))
+            self.assertEqual(len(quarantined), 1)
+            self.assertIn('claim-symlink', quarantined[0].name)
+            self.assertFalse((spool / 'apply.claim').exists())
+            self.assertEqual(result['status'], 'blocked')
+
 
 if __name__ == '__main__':
     unittest.main()
