@@ -58,16 +58,16 @@ OPS = [{
                'selectorValue': ['new.example.com'], 'outboundTag': 'proxy'},
 }]
 
-ROOT_POLICY = {'policy': {'schemaVersion': 1, 'mode': 'normal',
-                          'routeStage': 'assist', 'executionEpoch': 3,
-                          'policySnapshotDigest': 'bb' * 32}}
+ROOT_POLICY = {'schemaVersion': 1, 'policySnapshotDigest': 'bb' * 32,
+               'policy': {'schemaVersion': 1, 'mode': 'normal',
+                          'routeStage': 'assist', 'executionEpoch': 3}}
 
 INTENT_RULES = [{'tag': 'rill-managed-bbb222', 'selectorType': 'domain',
                  'selectorValue': ['another.example.com'], 'outboundTag': 'proxy'}]
 
-ROOT_POLICY_AUTO = {'policy': {'schemaVersion': 1, 'mode': 'normal',
-                               'routeStage': 'auto', 'executionEpoch': 3,
-                               'policySnapshotDigest': 'bb' * 32}}
+ROOT_POLICY_AUTO = {'schemaVersion': 1, 'policySnapshotDigest': 'bb' * 32,
+                    'policy': {'schemaVersion': 1, 'mode': 'normal',
+                               'routeStage': 'auto', 'executionEpoch': 3}}
 
 
 def _envelope(method, body):

@@ -1,0 +1,172 @@
+=== PID1 is systemd ===
+[PASS] PID1 is systemd
+=== static install sanity ===
+[PASS] manager present
+[PASS] config present
+[PASS] runtime binary present
+[PASS] agent binary present
+[PASS] apply binary present
+[PASS] root-policy binary present
+[PASS] runtime unit present
+[PASS] agent unit present
+[PASS] apply unit present
+[PASS] apply path unit present
+[PASS] config defaults routeAssist=false
+[PASS] config defaults boundedAuto=false
+[PASS] config defaults localOnly=true
+=== release manifest ===
+[PASS] release manifest present
+[PASS] routeAssist supported=true
+[PASS] routeAssist released=false
+[PASS] boundedAuto supported=true
+[PASS] boundedAuto released=false
+=== fresh observe-only ===
+[PASS] runtime unit active
+[PASS] agent unit active
+[PASS] observe path active
+[PASS] config mode=observe-only
+[PASS] runtime.sock connects
+[PASS] agent.sock connects
+[PASS] apply spool dir present
+[PASS] apply spool 2770 root:rill-xray-agent
+=== Runtime DAC contract ===
+=== Root executor DAC contract ===
+=== root policy helper ===
+[PASS] root-policy helper executable
+[PASS] root-policy status returns JSON
+[PASS] root-policy initial mode=observe-only
+[PASS] root-policy initial routeStage=observe
+=== mode transitions via root policy ===
+[PASS] apply observe-only
+[PASS] mode=observe-only
+[PASS] root-policy mode=observe-only
+[PASS] apply normal
+[PASS] mode=normal
+[PASS] root-policy mode=normal
+[PASS] agent unit active in normal
+[PASS] apply safe-disabled
+[PASS] mode=safe-disabled
+[PASS] root-policy mode=safe-disabled
+[PASS] agent unit inactive in safe-disabled
+[PASS] apply observe-only (back)
+=== route topology projection ===
+[PASS] route topology dir present
+[PASS] execution-policy projection present
+[PASS] projection JSON valid
+[PASS] projection read-only by Runtime
+[PASS] projection NOT writable by Runtime
+=== generation file root-owned ===
+[PASS] generation file present
+[PASS] generation root-owned
+[PASS] generation mode 0640
+=== gate-open: override manifest for test ===
+[PASS] save formal manifest
+[PASS] copy test manifest
+[PASS] test manifest released=true
+[PASS] disable apply.path for gate-open
+[PASS] restart runtime for gate-open manifest
+[PASS] runtime.sock back after restart
+[PASS] runtime active after restart
+=== gate-open: prepare managed config, root policy, topology ===
+[PASS] managed config written
+[PASS] xray service active
+[PASS] root policy projection written
+[PASS] generation bumped to 2
+[PASS] route topology written
+[PASS] observation written
+=== gate-open: Runtime routeStage assist ===
+[PASS] Runtime mode normal (gate-open)
+[PASS] Runtime mode=normal
+[PASS] Runtime routeStage assist
+[PASS] Runtime routeStage=assist
+=== gate-open: routePlan via Runtime CLI ===
+[PASS] Runtime CLI routePlan
+[PASS] routePlan recommendationId extracted
+[PASS] routePlan canApply=true
+  DEBUG: routePlan canApply/blockedBy={"canApply": true, "blockedBy": [], "released": true, "effectiveStage": "assist"}
+=== gate-open: routeApprove -> ApplyRequest in spool ===
+[PASS] routeApprove produces apply.json
+  DEBUG: routeApprove ok/applied/blockedBy={"ok": null, "applied": true, "wouldReject": false, "blockedBy": []}
+[PASS] apply.json in spool
+[PASS] apply.json schemaVersion=2
+[PASS] apply.json applyType=manual
+[PASS] apply.json executionEpoch bound
+=== gate-open: root executor processes the request ===
+[PASS] apply executor ran
+  DEBUG: apply executor raw={"blockedBy": [], "committedAtEpochSeconds": 1786899925, "committedConfigSha256": "1092374830b2085d40bc59ef358f1619a00dfefed4527efc30fccbaa8b00ca26", "configurationGeneration": 2, "nextConfigurationGeneration": 3, "planSha256": "cf8fba1bf03e6d896e619a8f6e520e8ecd9cbc6c0bab38609b4be19818c33d85", "receiptSha256": "194c8db02b211aeda3a511de1e1b17cb1877ff3ab7c61d95a288bbf8c74327cb", "recommendationId": "bbb43b46-aed9-5551-9237-0d28892db945", "resultSha256": "194c8db02b211aeda3a511de1e1b17cb1877ff3ab7c61d95a288bbf8c74327cb", "schemaVersion": 1, "sourceConfigSha256": "55b5a87e7433d4be757a912c0de295f73a726eb5ca013407eb67af9cece58bfb", "status": "committed"}
+[PASS] apply executor result status
+[PASS] apply.claim settled
+[PASS] apply.json consumed
+[PASS] delivery written
+=== gate-open: auto E2E ===
+[PASS] Runtime routeStage auto
+[PASS] Runtime autoConfirm
+[PASS] autoProduce produces apply.json
+  DEBUG: autoProduce raw={"ok":true,"requestId":"pid1-auto","result":{"applied":true,"blockedBy":[],"recommendationId":"8c95aa5a-96b7-547a-8a3c-220fc0715f42","releaseGateOpen":true,"wouldReject":false},"schemaVersion":3}
+[PASS] autoProduce result applied
+[PASS] auto apply.json in spool
+[PASS] auto apply.json applyType=auto
+  DEBUG: auto apply.json full content:
+{
+ "applyType": "auto",
+ "configurationGeneration": 3,
+ "createdAtEpochSeconds": 1786899925,
+ "effectiveStage": "auto",
+ "executionEpoch": 4,
+ "expiresAtEpochSeconds": 1786900225,
+ "mode": "normal",
+ "operations": [
+  {
+   "managedScope": true,
+   "op": "routingRule.insert",
+   "params": {
+    "outboundTag": "proxy",
+    "position": 2,
+    "selectorType": "domain",
+    "selectorValue": [
+     "another.example.com"
+    ]
+   }
+  }
+ ],
+ "planSha256": "42b7e2f1810ac577910a640bb0835c97225ec7de515bfa2fec2b7144d5567b57",
+ "policySnapshotDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+ "recommendationId": "8c95aa5a-96b7-547a-8a3c-220fc0715f42",
+ "recommendationType": "managed-route-intent-restore",
+ "releaseSnapshot": {
+  "boundedAuto": {
+   "released": true,
+   "supported": true
+  },
+  "routeAssist": {
+   "released": true,
+   "supported": true
+  }
+ },
+ "requestSha256": "7b9bad79e9b4fe58b1af05e461ab5007172d227dff07e353814f03bda726a18d",
+ "schemaVersion": 2,
+ "semanticFingerprint": "8c95aa5a-96b7-547a-8a3c-220fc0715f42",
+ "sourceConfigSha256": "1092374830b2085d40bc59ef358f1619a00dfefed4527efc30fccbaa8b00ca26"
+}
+=== gate-open: root executor commit auto request ===
+[PASS] auto executor ran
+  DEBUG: auto apply executor raw={"blockedBy": [], "committedAtEpochSeconds": 1786899925, "committedConfigSha256": "f1097dcaeaaf88003c23399b178ec324cfc5e07b12f362102b8257afdc36fbf5", "configurationGeneration": 3, "nextConfigurationGeneration": 4, "planSha256": "42b7e2f1810ac577910a640bb0835c97225ec7de515bfa2fec2b7144d5567b57", "receiptSha256": "2ac9b36499596393d3daa371beb1b45c6632f95874071bb41c0ff68cd4d35a0a", "recommendationId": "8c95aa5a-96b7-547a-8a3c-220fc0715f42", "resultSha256": "2ac9b36499596393d3daa371beb1b45c6632f95874071bb41c0ff68cd4d35a0a", "schemaVersion": 1, "sourceConfigSha256": "1092374830b2085d40bc59ef358f1619a00dfefed4527efc30fccbaa8b00ca26", "status": "committed"}
+  DEBUG: spool dir after executor:
+total 8
+drwxrws--- 1 root            rill-xray-agent  20 Aug 16 17:05 .
+drwxr-xr-x 1 root            root             42 Aug 16 17:05 ..
+-rw-r----- 1 rill-xray-agent rill-xray-agent 999 Aug 16 17:05 apply.done
+[PASS] auto executor committed
+=== gate-open: live Xray restart test (P0-9) ===
+[PASS] xray config validates
+[PASS] xray restart via systemctl
+[PASS] xray active after restart
+=== restore release manifest ===
+[PASS] restore formal manifest released=false
+[PASS] formal manifest released=false
+[PASS] re-enable apply.path
+[PASS] apply.path active after restore
+=== formal verify ===
+[PASS] verify.sh runtime path exits 0
+=== totals ===
+PID1 route-readiness suite: 98 PASS, 0 FAIL
