@@ -52,7 +52,8 @@ class TopologyProjectionTest(unittest.TestCase):
     def test_projection_shape(self):
         p = self._project()
         self.assertEqual(p['schemaVersion'], 2)
-        self.assertEqual(p['configGeneration'], 3)
+        self.assertEqual(p['configurationGeneration'], 3)
+        self.assertNotIn('configGeneration', p)
         self.assertEqual(p['routingRulesCount'], 4)
         self.assertEqual(len(p['rules']), 4)
         self.assertEqual(p['wholeConfigSha256'], 'ab' * 32)

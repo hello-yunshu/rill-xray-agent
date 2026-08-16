@@ -56,7 +56,7 @@ class ReadOnlyRecoveryTests(unittest.TestCase):
             gen = r / 'gen'
             gen.write_text('1\n')
             before = snapshot(txroot)
-            svc = RuntimeService(r / 'state', txroot)
+            svc = RuntimeService(r / 'state', txroot, generation_file=gen)
             self.assertTrue(svc.recovery_required)
             self.assertGreaterEqual(len(svc.recovery['unresolved']), 1)
             self.assertEqual(snapshot(txroot), before, 'Runtime must not rewrite tx area')
@@ -98,7 +98,7 @@ class ReadOnlyRecoveryTests(unittest.TestCase):
             self.assertEqual(gen_final, 4)
             before_tx = snapshot(txroot)
             before_delivery = (state / 'delivery/route-delivery.json').read_bytes()
-            svc = RuntimeService(state, txroot)
+            svc = RuntimeService(state, txroot, generation_file=state / 'generation')
             self.assertFalse(svc.recovery_required)
             self.assertEqual(snapshot(txroot), before_tx)
             self.assertEqual((state / 'delivery/route-delivery.json').read_bytes(), before_delivery)

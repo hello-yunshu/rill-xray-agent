@@ -11,7 +11,7 @@ ExecStart=/opt/rill-xray-agent/bin/rill-xray-agent-apply
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/var/spool/rill-xray-agent-apply /var/lib/rill-xray-agent-runtime/delivery /var/lib/rill-xray-agent-root/transactions /etc/rill-xray-agent/host
+ReadWritePaths=/var/spool/rill-xray-agent-apply /var/lib/rill-xray-agent-runtime/delivery /var/lib/rill-xray-agent-root/transactions /var/lib/rill-xray-agent-root/generation /etc/rill-xray-agent/host
 ReadOnlyPaths=/opt/rill-xray-agent /var/lib/rill-xray-agent-xray
 ProtectHome=true
 [Install]

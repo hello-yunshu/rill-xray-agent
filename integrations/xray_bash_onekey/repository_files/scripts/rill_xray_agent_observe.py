@@ -34,11 +34,24 @@ try:
     from rill_xray_agent.observer_transition import (CHECKPOINT_NAME,
                                                      commit_transition,
                                                      recover_pending_transition)
+    from rill_xray_agent.canonical import atomic_write_json
+    from rill_xray_agent.route_topology import RouteTopologyProjection
 except ImportError as exc:  # pragma: no cover - fail closed, never drift
     raise SystemExit(f"rill_xray_agent canonical modules unavailable: {exc}")
 
 ROOT = Path(os.environ.get("RILL_XRAY_HOST_ROOT", "/etc/idleleo"))
 OUT = Path(os.environ.get("RILL_XRAY_AGENT_OUTPUT", "/var/lib/rill-xray-agent-xray/status/xray-observation.json"))
+# §P0-4: the safe, secret-free route-topology projection. The ROOT observer
+# produces it from the root-owned config + the root-owned generation file; the
+# unprivileged Runtime consumes it READ-ONLY and never reads the raw config.
+ROUTE_TOPOLOGY = Path(os.environ.get(
+    "RILL_XRAY_AGENT_TOPOLOGY",
+    "/var/lib/rill-xray-agent-xray/status/route-topology.json"))
+# Root-owned generation authority (§P0-7): the generation file lives in the
+# root-only state tree. Only the root oneshot executor writes it; the root
+# observer reads it so the projection carries the CURRENT generation.
+GENERATION_FILE = Path(os.environ.get(
+    "RILL_XRAY_AGENT_GENERATION", "/var/lib/rill-xray-agent-root/generation"))
 HISTORY = Path(os.environ.get("RILL_XRAY_AGENT_HISTORY", "/var/lib/rill-xray-agent-xray/history"))
 SEGMENT_BYTES = 512 * 1024
 TOTAL_BYTES = 4 * 1024 * 1024
@@ -121,6 +134,44 @@ install_config = ROOT / "conf/install_config.json"
 xray_bin = Path("/usr/local/bin/xray")
 nginx_bin = Path("/usr/local/nginx/sbin/nginx")
 missing = {"ok": False, "returnCode": 66, "outputSha256": hashlib.sha256(b"missing").hexdigest()}
+
+
+def read_generation() -> int:
+    """Root-owned configuration generation (§P0-7). Missing/unreadable file
+    fails closed to 0 (a fresh install has no committed generation yet)."""
+    try:
+        return int(GENERATION_FILE.read_text().strip())
+    except Exception:
+        return 0
+
+
+def route_topology_projection() -> dict:
+    """Safe, secret-free route-topology projection (§P0-4).
+
+    Reads the ROOT-owned Xray config (never visible to the Runtime) and the
+    root-owned generation file, then emits RouteTopologyProjection.project().
+    Selector values are persisted only as digests; UUID / privateKey / Reality
+    material / proxy URLs / credentials never appear. A missing or unparseable
+    config produces an EMPTY projection (fail closed), never a partial leak.
+    """
+    routing = None
+    whole_digest = ""
+    if xray_config.is_file() and not xray_config.is_symlink():
+        try:
+            raw = json.loads(xray_config.read_text())
+        except Exception:
+            raw = None
+        if isinstance(raw, dict) and isinstance(raw.get("routing"), dict):
+            routing = raw["routing"]
+        whole_digest = sha(xray_config)
+    return RouteTopologyProjection(
+        routing if isinstance(routing, dict) else {},
+        config_generation=read_generation(),
+        whole_config_safe_digest=whole_digest,
+        captured_at_epoch_seconds=int(time.time()),
+    ).project()
+
+
 data = {
     "schemaVersion": 1,
     "capturedAtEpochSeconds": int(time.time()),
@@ -163,4 +214,9 @@ with ObserverLock(OBSERVER_LOCK):
     # derived events, then atomically replaces the observation. A crash between
     # the two is recovered idempotently on restart (no lost, no duplicate event).
     commit_transition(journal, OUT, OUT.parent / CHECKPOINT_NAME, previous, data)
+    # §P0-4: the safe route-topology projection is written atomically (0640
+    # root:rill-xray-agent, parent status dir is setgid 2750) under the SAME
+    # observer mutex so topology and observation are captured consistently.
+    # atomic_write_json rejects symlink targets and replaces atomically.
+    atomic_write_json(ROUTE_TOPOLOGY, route_topology_projection(), 0o640)
 print(json.dumps(data, sort_keys=True))

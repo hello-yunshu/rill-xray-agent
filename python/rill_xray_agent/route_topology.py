@@ -156,12 +156,12 @@ class RouteTopologyProjection:
         return {
             'schemaVersion': 2,
             'capturedAtEpochSeconds': self._captured_at,
-            # Canonical public field name (P0-7): generation is root-owned
-            # authority. ``configGeneration`` remains ONLY as a deprecated
-            # migration alias for older consumers; new schema never double-writes
-            # both as separate truths.
+            # §P0-7: 'configurationGeneration' is the single canonical public
+            # field; generation is root-owned authority. The deprecated
+            # 'configGeneration' alias is NOT emitted by the new schema (new
+            # schema never double-writes); legacy readers that still look for
+            # it are handled by migration/reader compat, not by new output.
             'configurationGeneration': gen,
-            'configGeneration': gen,
             'wholeConfigSha256': d,
             'wholeConfigSafeDigest': d,
             'routingRulesCount': len(self._rules),
