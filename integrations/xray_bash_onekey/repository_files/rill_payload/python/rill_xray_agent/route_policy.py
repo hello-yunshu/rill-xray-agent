@@ -1,3 +1,6 @@
+import time
+
+
 class RoutePolicy:
     """Fail-closed route execution policy.
 
@@ -177,3 +180,84 @@ class RoutePolicy:
             'effectiveStage': effective_stage,
             'blockedBy': blocked,
         }
+
+
+def evaluate_plan_policy(plan, apply_type, mode, configured_stage,
+                         release_capabilities, health, recovery_required,
+                         observation_fresh, observation_integrity_valid,
+                         timeline_integrity_valid, current_generation,
+                         current_config_sha256, current_execution_epoch,
+                         auto_confirmed=False, risk_auto_eligible=False,
+                         auto_allowlisted_op=False, fusible_open=False,
+                         rate_limit_ok=False, cooldown_ok=False, now=None):
+    """Concrete RoutePlan policy evaluation (§P0-1).
+
+    RoutePolicy.evaluate() is a CAPABILITY-level evaluation: without a concrete
+    plan it cannot (and must not) claim any particular plan may be applied, so
+    canManualApply/canAutoApply stay False. This function is the CONCRETE
+    evaluation: it computes the plan-specific gates from the actual plan body
+    and the CURRENT root-authoritative state and returns the same decision
+    shape as RoutePolicy.evaluate():
+
+      plan schema valid (schemaVersion==1 + planSha256 present)
+      planSha256 / operations digest are valid (checked by the caller)
+      not expired
+      current root-owned generation matches
+      current live config SHA matches
+      current root executionEpoch is valid
+      mode / stage matches
+      release gate matches
+      health ready
+      no unresolved recovery
+      observation / timeline integrity
+      manual / auto-specific gates
+
+    routeApprove() must be authorized by THIS evaluation, never by a global
+    capability status. The root executor still independently re-validates every
+    key condition against the live root policy / live config (§16); a Runtime
+    pass here only means "submittable", never final permission.
+    """
+    now = int(now if now is not None else time.time())
+
+    # --- plan-specific facts (fail closed) -------------------------------
+    plan_valid = (isinstance(plan, dict)
+                  and plan.get('schemaVersion') == 1
+                  and isinstance(plan.get('planSha256'), str)
+                  and bool(plan.get('planSha256')))
+    exp = plan.get('expiresAtEpochSeconds') if isinstance(plan, dict) else None
+    plan_not_expired = isinstance(exp, int) and now <= exp
+    generation_match = (isinstance(plan, dict)
+                        and plan.get('configurationGeneration') == current_generation)
+    config_hash_match = (isinstance(plan, dict)
+                         and isinstance(plan.get('sourceConfigSha256'), str)
+                         and bool(plan.get('sourceConfigSha256'))
+                         and plan.get('sourceConfigSha256') == current_config_sha256)
+    # The CURRENT root execution epoch must be a valid integer (the request
+    # binds it; the root executor re-checks the exact value against the live
+    # root policy). A missing/unavailable root projection fails closed.
+    execution_epoch_match = (isinstance(current_execution_epoch, int)
+                             and not isinstance(current_execution_epoch, bool)
+                             and current_execution_epoch >= 0)
+
+    policy = RoutePolicy(
+        mode=mode,
+        configured_stage=configured_stage,
+        release_capabilities=release_capabilities,
+        health=health,
+        recovery_required=recovery_required,
+        observation_fresh=observation_fresh,
+        observation_integrity_valid=observation_integrity_valid,
+        timeline_integrity_valid=timeline_integrity_valid,
+        plan_valid=plan_valid,
+        plan_not_expired=plan_not_expired,
+        generation_match=generation_match,
+        config_hash_match=config_hash_match,
+        execution_epoch_match=execution_epoch_match,
+        fusible_open=fusible_open,
+        rate_limit_ok=rate_limit_ok,
+        cooldown_ok=cooldown_ok,
+        auto_confirmed=auto_confirmed,
+        risk_auto_eligible=risk_auto_eligible,
+        auto_allowlisted_op=auto_allowlisted_op,
+    )
+    return policy.evaluate()

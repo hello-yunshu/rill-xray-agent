@@ -31,7 +31,7 @@ from pathlib import Path
 
 from .canonical import atomic_write_bytes, canonical_bytes, digest, file_sha256, read_json
 from .errors import ContractError, TransactionError
-from .root_txn import RootTransaction
+from .root_txn import RootTransaction, DEFAULT_GENERATION_PATH
 from .root_policy import DEFAULT_PROJECTION_PATH, RootExecutionPolicy, RootPolicyIntegrityError
 from .route_analyzer import RECOMMENDATION_TYPES
 from .route_contract import (ALLOWED_OPS, INDEX_KEYS, MAX_OPERATIONS, MAX_PARAMS,
@@ -318,16 +318,19 @@ class RouteExecutor:
 
     def __init__(self, state_root, txn_root, spool_dir=None, release_capabilities=None,
                  managed_config_path=None, xray_bin=None, allowed_producer_uids=None,
-                 root_policy=None, projection_path=None):
+                 root_policy=None, projection_path=None, generation_file=None):
         self.state_root = Path(state_root)
         self.txn_root = Path(txn_root)
         self.spool_dir = Path(spool_dir or DEFAULT_APPLY_SPOOL_DIR)
-        # Share the SAME generation/delivery files with the Runtime so the
-        # Runtime (read-only) can observe committed generations, receipts and
-        # deliveries. The executor is the root-owned writer.
+        # §P0-7: generation lives at the ROOT-owned path
+        # (/var/lib/rill-xray-agent-root/generation). The Runtime reads the
+        # SAME file (read-only) to observe committed generations; the
+        # executor is the root-owned writer. The delivery file stays under
+        # the runtime state root because it is a one-way, informational
+        # delivery channel the Runtime consumes.
         self.txn = RootTransaction(self.txn_root,
                                    self.state_root / 'delivery',
-                                   self.state_root / 'generation')
+                                   generation_file or DEFAULT_GENERATION_PATH)
         from .release_capabilities import ReleaseCapabilities
         self.release = release_capabilities if release_capabilities is not None \
             else ReleaseCapabilities()

@@ -2,7 +2,7 @@ import json, os, socket, time, uuid, threading, sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from .audit import AuditLog
-from .canonical import atomic_write_json, canonical_bytes, digest, file_sha256, read_json
+from .canonical import atomic_write_json, canonical_bytes, digest, read_json
 from .doctor import Doctor
 from .errors import EventJournalError
 from .event_journal import EventJournal
@@ -13,13 +13,15 @@ from .peer_auth import AccessControl, peer_credentials
 from .state import RuntimeState
 from .root_txn import RootTransaction
 from .release_capabilities import ReleaseCapabilities
-from .route_policy import RoutePolicy
+from .route_policy import RoutePolicy, evaluate_plan_policy
 from .route_history import RouteHistory
 from .route_topology import RouteTopologyProjection
 from .route_planner import RoutePlanner
+from .route_contract import AUTO_ROUTE_OPS, overall_risk
 from .route_executor import request_digest
 from .auto_policy import AutoPolicy
 from .root_policy import DEFAULT_PROJECTION_PATH
+from .root_txn import DEFAULT_GENERATION_PATH
 from .errors import UnknownDecisionError
 from .doctor import Doctor
 
@@ -28,6 +30,11 @@ ACCESS_LOG_BYTES = 8 * 1024 * 1024
 MAX_FRAME_BYTES = 1048576
 DEFAULT_OBSERVATION_PATH = '/var/lib/rill-xray-agent-xray/status/xray-observation.json'
 DEFAULT_TIMELINE_DIR = '/var/lib/rill-xray-agent-xray/history'
+# §P0-4: the safe route-topology projection produced by the ROOT observer.
+# The unprivileged Runtime reads ONLY this secret-free projection (plus
+# observation / timeline / root-policy projection); it never reads the raw
+# Xray config on the host or the raw host mirror.
+DEFAULT_TOPOLOGY_PATH = '/var/lib/rill-xray-agent-xray/status/route-topology.json'
 MAX_DIAGNOSE_TIMELINE_EVENTS = 200
 OBSERVATION_FRESHNESS_SECONDS = 300
 
@@ -77,7 +84,8 @@ class RuntimeService:
                  default_uid=None, observation_path=None, timeline_dir=None,
                  release_capabilities=None, auto_policy_path=None,
                  route_history_path=None, apply_spool_dir=None,
-                 root_policy_projection_path=None):
+                 root_policy_projection_path=None, generation_file=None,
+                 topology_path=None):
         self.state_root = Path(state_root)
         self.state_root.mkdir(parents=True, exist_ok=True)
         self.txn_root = Path(txn_root)
@@ -93,9 +101,14 @@ class RuntimeService:
         # The Runtime never appends to the journal; it only reads recent events.
         self.observation_path = Path(observation_path or DEFAULT_OBSERVATION_PATH)
         self.timeline_dir = Path(timeline_dir or DEFAULT_TIMELINE_DIR)
+        # §P0-4: the secret-free route-topology projection, root-owned and
+        # READ-ONLY to the Runtime (systemd ReadOnlyPaths on the status tree).
+        # All topology/risk/ownership facts come from THIS projection; the
+        # Runtime never opens the raw Xray config.
+        self.topology_path = Path(topology_path or DEFAULT_TOPOLOGY_PATH)
         self.events = EventJournal(self.timeline_dir, read_only=True)
         self.txn = RootTransaction(self.txn_root, self.state_root / 'delivery',
-                                   self.state_root / 'generation')
+                                   generation_file or DEFAULT_GENERATION_PATH)
         # READ-ONLY: the production Runtime runs with ReadOnlyPaths on the
         # root transaction area and must NEVER materialize, rewrite history
         # or restore root-owned managed files. Privileged recovery is a
@@ -433,6 +446,15 @@ class RuntimeService:
                 if not status['canPlan']:
                     raise ValueError('route planning not available')
                 topology = self._current_topology()
+                # §P0-4: fail closed when the root-owned route-topology
+                # projection is unavailable. The Runtime never synthesizes a
+                # config hash (that would require reading the raw config it
+                # must not see); with no projection no plan gate can be
+                # proven, so no plan may be produced.
+                if not topology.get('wholeConfigSha256'):
+                    err = ValueError('route topology projection unavailable (fail closed)')
+                    err.code = 'topology_unavailable'
+                    raise err
                 planner = RoutePlanner(topology, routing=self._routing_rules())
                 plan = planner.plan(operations=b.get('operations') or [])
                 meta = sanitize_route_plan_meta(plan)
@@ -445,15 +467,20 @@ class RuntimeService:
                     })
                 except ValueError:
                     pass
-                # Policy decides what the plan MAY do, separate from what the
-                # planner produced.
-                policy_status = self._route_status()
-                r = {'plan': plan, 'canApply': policy_status['canManualApply'],
-                     'canAutoApply': policy_status['canAutoApply'],
-                     'shadowWouldApply': policy_status['shadowWouldApply'],
-                     'blockedBy': policy_status['blockedBy'],
-                     'released': policy_status['released'],
-                     'effectiveStage': policy_status['effectiveStage']}
+                # Policy decides what the plan MAY do (§P0-1): the CONCRETE
+                # evaluation derives the plan gates from the actual plan body
+                # and the CURRENT root-authoritative state, so a real plan is
+                # never deadlocked by a capability-level status that holds no
+                # plan. In the locked release this still reports canApply=false
+                # with blockedBy=[feature_not_released].
+                decision = self._concrete_route_eval(
+                    plan, apply_type='manual', operations=plan.get('operations'))
+                r = {'plan': plan, 'canApply': decision['canManualApply'],
+                     'canAutoApply': decision['canAutoApply'],
+                     'shadowWouldApply': decision['shadowWouldApply'],
+                     'blockedBy': decision['blockedBy'],
+                     'released': status['released'],
+                     'effectiveStage': decision['effectiveStage']}
             elif m == 'routeApprove':
                 # Full manual-approval contract. In the locked production
                 # release this fails closed before any host mutation: the
@@ -638,54 +665,53 @@ class RuntimeService:
             'boundedAutoAllowed': status['effectiveStage'] == 'auto' and ba['released'],
         }
 
-    def _current_topology(self):
-        """Build a RouteTopologyProjection from the managed config.
+    def _read_topology(self):
+        """Read the root-owned route-topology projection (READ-ONLY, §P0-4).
 
-        The Runtime reads the managed config file (same path the root executor
-        would mutate) to produce a safe, secret-free topology projection for
-        the planner. When the config is unreadable (e.g. first run, not yet
-        provisioned) returns an empty topology.
+        The Runtime never reads the raw Xray config; all topology / risk /
+        ownership / index facts come from this secret-free projection produced
+        by the root observer. read_json rejects symlinks and non-regular
+        files. A missing / corrupt / malformed projection returns None so
+        callers fail closed (empty topology, no plan gates proven).
         """
-        mcp = Path(os.environ.get('RILL_MANAGED_CONFIG',
-                                   '/etc/rill-xray-agent/host/conf/xray/config.json'))
-        managed_config = None
-        if mcp.is_file() and not mcp.is_symlink():
-            try:
-                managed_config = read_json(mcp)
-            except (ValueError, OSError):
-                pass
-        if not isinstance(managed_config, dict):
-            return {'schemaVersion': 1, 'capturedAtEpochSeconds': int(time.time()),
-                    'configGeneration': 0, 'wholeConfigSha256': '',
-                    'routingRulesCount': 0, 'rules': []}
-        routing = managed_config.get('routing')
-        if not isinstance(routing, dict):
-            return {'schemaVersion': 1, 'capturedAtEpochSeconds': int(time.time()),
-                    'configGeneration': 0, 'wholeConfigSha256': '',
-                    'routingRulesCount': 0, 'rules': []}
-        # The topology projection uses 'configGeneration' (snake_case) but the
-        # planner reads 'configurationGeneration'. Normalize here.
-        gen = self.txn.generation()
-        whole_digest = file_sha256(mcp) if mcp.is_file() else ''
-        projection = RouteTopologyProjection(
-            routing, config_generation=gen,
-            whole_config_safe_digest=whole_digest,
-            captured_at_epoch_seconds=int(time.time())).project()
-        projection['configurationGeneration'] = gen
-        return projection
+        try:
+            data = read_json(self.topology_path)
+        except (ValueError, OSError):
+            return None
+        if not isinstance(data, dict) or not isinstance(data.get('rules'), list):
+            return None
+        return data
+
+    def _empty_topology(self):
+        return {'schemaVersion': 2, 'capturedAtEpochSeconds': int(time.time()),
+                'configurationGeneration': 0, 'wholeConfigSha256': '',
+                'wholeConfigSafeDigest': '', 'routingRulesCount': 0, 'rules': []}
+
+    def _current_topology(self):
+        """Return the current safe route-topology projection (§P0-4).
+
+        The projection is produced by the ROOT observer (which alone reads the
+        root-owned Xray config) and consumed read-only here. It is returned
+        as-is so the planner's topologySha256 binds the same projection the
+        analyzer/observer produced. When the projection is unavailable (first
+        run, observer not yet fired) returns an empty topology so shadow
+        planning fails closed instead of reading raw config.
+        """
+        proj = self._read_topology()
+        if proj is None:
+            return self._empty_topology()
+        return proj
 
     def _routing_rules(self):
-        """Return the routing.rules dict from the managed config, or {}."""
-        mcp = Path(os.environ.get('RILL_MANAGED_CONFIG',
-                                   '/etc/rill-xray-agent/host/conf/xray/config.json'))
-        if not mcp.is_file() or mcp.is_symlink():
+        """Return the SAFE projected rules dict from the route-topology
+        projection (§P0-4). The Runtime never reads the raw config: risk /
+        ownership / index precondition evaluation uses the secret-free
+        projected rules (selector types + digests), which the route contract
+        already understands (see rule_selector_type)."""
+        proj = self._read_topology()
+        if proj is None:
             return {}
-        try:
-            config = read_json(mcp)
-        except (ValueError, OSError):
-            return {}
-        routing = config.get('routing') if isinstance(config, dict) else None
-        return routing if isinstance(routing, dict) else {}
+        return {'rules': proj.get('rules') or []}
 
     def _history_plan(self, recommendation_id):
         """Look up a plan from the route history by recommendationId."""
@@ -715,6 +741,73 @@ class RuntimeService:
             return None
         return policy
 
+    def _concrete_route_eval(self, plan, apply_type='manual', operations=None):
+        """Concrete RoutePlan policy evaluation (§P0-1).
+
+        _route_status() / RoutePolicy.evaluate() are CAPABILITY-level: without
+        a concrete plan they must report canManualApply/canAutoApply=False
+        (the plan gates are unproven). This method is the CONCRETE evaluation:
+        it derives the plan-specific gates (valid / not-expired / generation
+        match / config-hash match / execution-epoch match) from the actual
+        plan body and the CURRENT root-authoritative state, so a real plan is
+        never deadlocked by its own absence. The root executor still
+        re-validates every condition against the live root policy and the live
+        managed config (§16/§19); a pass here only means "submittable", never
+        final permission.
+        """
+        s = self.state.load()
+        obs = self._observation_status()
+        tl = self._timeline_status()
+        root_policy = self._read_root_policy()
+        execution_epoch = None
+        if isinstance(root_policy, dict):
+            ep = root_policy.get('executionEpoch')
+            if isinstance(ep, int) and not isinstance(ep, bool) and ep >= 0:
+                execution_epoch = ep
+        # §P0-4: config hash / generation / rules all come from the root-owned
+        # route-topology projection (READ-ONLY), never from the raw config.
+        proj = self._read_topology()
+        if proj is None:
+            current_config_sha = ''
+            current_generation = 0
+            rules = []
+        else:
+            current_config_sha = (proj.get('wholeConfigSha256')
+                                  or proj.get('wholeConfigSafeDigest') or '')
+            current_generation = int(proj.get('configurationGeneration') or 0)
+            rules = proj.get('rules') or []
+        # Auto-policy facts from the SAME cooldown/rate/fuse core the root
+        # ledger uses, evaluated against the CURRENT policy state.
+        snap = self.auto_policy.snapshot()
+        fusible_open = not snap['fuseOpen']
+        rate_limit_ok = snap['autoMutationsLastHour'] < snap['maxAutoMutationsPerHour']
+        cooldown_ok = snap['globalCooldownRemainingSeconds'] <= 0
+        # §19: auto risk/op-allowlist are recomputed from the SAFE projected
+        # rules (mirrors the root executor, which recomputes from the live raw
+        # rules); never trusted from a request-declared label.
+        ops = operations if isinstance(operations, list) else []
+        risk_auto_eligible = overall_risk(ops, rules) == 'low'
+        auto_allowlisted_op = bool(ops) and all(
+            isinstance(o, dict) and o.get('op') in AUTO_ROUTE_OPS for o in ops)
+        return evaluate_plan_policy(
+            plan, apply_type=apply_type, mode=s['mode'],
+            configured_stage=s.get('routeStage', 'observe'),
+            release_capabilities=self.release, health=self.health_status(),
+            recovery_required=self.recovery_required,
+            observation_fresh=obs['fresh'],
+            observation_integrity_valid=obs['integrityValid'],
+            timeline_integrity_valid=tl['integrityValid'],
+            current_generation=current_generation,
+            current_config_sha256=current_config_sha,
+            current_execution_epoch=execution_epoch,
+            auto_confirmed=isinstance(s.get('autoConfirmedAtEpochSeconds'), int),
+            risk_auto_eligible=risk_auto_eligible,
+            auto_allowlisted_op=auto_allowlisted_op,
+            fusible_open=fusible_open,
+            rate_limit_ok=rate_limit_ok,
+            cooldown_ok=cooldown_ok,
+        )
+
     def _route_approve(self, rid, operations, plan, status, peer_uid):
         """Manual approval contract. Fail-closed when release gate is locked.
 
@@ -737,9 +830,16 @@ class RuntimeService:
         if isinstance(plan.get('expiresAtEpochSeconds'), int) and now > plan['expiresAtEpochSeconds']:
             return self._record_approval(
                 rid, now, plan, applied=False, blocked=['plan_expired'])
-        if not status['canManualApply']:
+        # Concrete policy evaluation (§P0-1): the plan-specific gates are
+        # derived from the actual plan body + the CURRENT root-authoritative
+        # state, so a real plan is never deadlocked by a capability-level
+        # status that holds no plan. In the locked production release this
+        # still fails closed with feature_not_released before any mutation.
+        decision = self._concrete_route_eval(plan, apply_type='manual',
+                                             operations=canonical_ops)
+        if not decision['canManualApply']:
             return self._record_approval(
-                rid, now, plan, applied=False, blocked=status['blockedBy'])
+                rid, now, plan, applied=False, blocked=decision['blockedBy'])
         # Release gate is open: bind the request to the CURRENT root-owned
         # execution policy (§12/§13). If the root projection is unavailable or
         # unsafe the Runtime fails closed: it cannot produce a validly-bound
@@ -774,7 +874,7 @@ class RuntimeService:
             'policySnapshotDigest': policy_snapshot_digest,
             'applyType': 'manual',
             'mode': 'normal',
-            'effectiveStage': status['effectiveStage'],
+            'effectiveStage': decision['effectiveStage'],
             'releaseSnapshot': {
                 'routeAssist': {'supported': status['routeAssist']['supported'],
                                 'released': status['routeAssist']['released']},

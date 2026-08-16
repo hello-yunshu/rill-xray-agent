@@ -3,11 +3,11 @@
   "$id": "route-topology.v1.schema.json",
   "title": "Route Topology Projection",
   "type": "object",
-  "required": ["schemaVersion", "capturedAtEpochSeconds", "configGeneration", "wholeConfigSha256", "routingRulesCount", "rules"],
+  "required": ["schemaVersion", "capturedAtEpochSeconds", "configurationGeneration", "wholeConfigSha256", "routingRulesCount", "rules"],
   "properties": {
     "schemaVersion": {"type": "integer", "enum": [2]},
     "capturedAtEpochSeconds": {"type": "integer"},
-    "configGeneration": {"type": "integer"},
+    "configurationGeneration": {"type": "integer"},
     "wholeConfigSha256": {"type": "string"},
     "routingRulesCount": {"type": "integer"},
     "rules": {

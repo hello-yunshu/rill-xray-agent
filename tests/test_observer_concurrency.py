@@ -132,6 +132,8 @@ class ObserverConcurrencyTests(unittest.TestCase):
         env["RILL_XRAY_AGENT_OUTPUT"] = str(self.out)
         env["RILL_XRAY_AGENT_HISTORY"] = str(self.history)
         env["RILL_XRAY_AGENT_LOCK"] = str(self.lock)
+        env["RILL_XRAY_AGENT_TOPOLOGY"] = str(self.out.parent / "route-topology.json")
+        env["RILL_XRAY_AGENT_GENERATION"] = str(self.root / "generation")
         env["RILL_XRAY_AGENT_PYTHON"] = str(ROOT / "python")
         procs = [
             subprocess.Popen(["python3", str(SCRIPTS / "rill_xray_agent_observe.py")],

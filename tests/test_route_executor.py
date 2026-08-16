@@ -69,7 +69,8 @@ def make_executor(td, released=False, xray_ok=True, root_mode='normal',
                        managed_config_path=mcp, xray_bin=xray_bin,
                        allowed_producer_uids=[os.geteuid()],
                        root_policy=rp,
-                       projection_path=Path(td) / 'proj' / 'execution-policy.json')
+                       projection_path=Path(td) / 'proj' / 'execution-policy.json',
+                       generation_file=state_root / 'generation')
     return ex, mcp, spool
 
 

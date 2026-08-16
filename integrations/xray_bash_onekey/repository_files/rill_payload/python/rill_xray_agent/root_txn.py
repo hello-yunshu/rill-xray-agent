@@ -9,6 +9,13 @@ TERMINAL_STATES = {'committed', 'rolledBack', 'rollbackUnverified'}
 RECOVERABLE_STATES = {'prepared', 'applying', 'applied', 'verified', 'commit-intent', 'rollback-intent'}
 UNVERIFIED_STATE = 'rollbackUnverified'
 
+# Root-owned generation file (§P0-7). Generation participates in root-side
+# stale-plan authorization, so its final authority must be a root-only path,
+# never the unprivileged Runtime state root. The Runtime service only READS
+# it (ReadOnlyPaths=/var/lib/rill-xray-agent-root); only the root oneshot
+# (rill-xray-agent-apply) writes it via RootTransaction.
+DEFAULT_GENERATION_PATH = Path('/var/lib/rill-xray-agent-root/generation')
+
 
 def fault(point: str):
     """Controllable crash injection at real persistence boundaries.
