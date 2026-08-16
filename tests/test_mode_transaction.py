@@ -51,6 +51,43 @@ with open(out, "w") as stream:
 print("ok")
 """
 
+ROOT_POLICY_STUB = """#!/usr/bin/env bash
+# mimic: rill-xray-agent-root-policy <command> ...
+# Tracks the authoritative mode in RXA_ROOT_POLICY_STATE and the routeStage in
+# RXA_ROOT_POLICY_STAGE_STATE. RXA_ROOT_POLICY_FAIL makes every mutating
+# command fail closed (missing/corrupt-helper probe).
+STATE="${RXA_ROOT_POLICY_STATE}"
+STAGE="${RXA_ROOT_POLICY_STAGE_STATE}"
+cmd="$1"; shift
+case "$cmd" in
+    status)
+        mode=$(cat "${STATE}" 2>/dev/null || printf 'observe-only')
+        stage=$(cat "${STAGE}" 2>/dev/null || printf 'observe')
+        printf '{"schemaVersion":1,"ok":true,"command":"status","policy":{"mode":"%s","routeStage":"%s","autoConfirmed":false,"executionEpoch":0}}\\n' "$mode" "$stage"
+        ;;
+    mode)
+        if [[ "${RXA_ROOT_POLICY_FAIL:-0}" == 1 ]]; then exit 1; fi
+        printf '%s' "${1:-}" > "${STATE}" || true
+        printf '{"schemaVersion":1,"ok":true,"command":"mode"}\\n'
+        ;;
+    safe-disable)
+        if [[ "${RXA_ROOT_POLICY_FAIL:-0}" == 1 ]]; then exit 1; fi
+        printf '%s' 'safe-disabled' > "${STATE}" || true
+        printf '{"schemaVersion":1,"ok":true,"command":"safe-disable"}\\n'
+        ;;
+    route-stage)
+        if [[ "${RXA_ROOT_POLICY_FAIL:-0}" == 1 ]]; then exit 1; fi
+        printf '%s' "${1:-}" > "${STAGE}" || true
+        printf '{"schemaVersion":1,"ok":true,"command":"route-stage"}\\n'
+        ;;
+    confirm-auto|revoke-auto|acknowledge-fuse)
+        if [[ "${RXA_ROOT_POLICY_FAIL:-0}" == 1 ]]; then exit 1; fi
+        printf '{"schemaVersion":1,"ok":true,"command":"%s"}\\n' "$cmd"
+        ;;
+    *) exit 66 ;;
+esac
+"""
+
 SYSCTL_STUB = """#!/usr/bin/env bash
 # Fake systemctl used by same-mode repair tests. Unit state is tracked by
 # files under RXA_SYS_STATE: active/<unit> and enabled/<unit>.
@@ -141,12 +178,19 @@ class ModeTransaction(unittest.TestCase):
         self.cli = self.tmp / "rill-xray-agent"
         self.observe = self.tmp / "observe.py"
         self.sysctl = self.tmp / "systemctl"
+        self.root_policy = self.tmp / "rill-xray-agent-root-policy"
+        self.root_policy_state = self.tmp / "root-policy.state"
+        self.root_policy_state.write_text("observe-only")
+        self.root_policy_stage_state = self.tmp / "root-policy-stage.state"
+        self.root_policy_stage_state.write_text("observe")
         self.cli.write_text(CLI_STUB)
         self.observe.write_text(OBSERVE_STUB)
         self.sysctl.write_text(SYSCTL_STUB)
+        self.root_policy.write_text(ROOT_POLICY_STUB)
         self.cli.chmod(0o755)
         self.observe.chmod(0o755)
         self.sysctl.chmod(0o755)
+        self.root_policy.chmod(0o755)
         self._env = dict(os.environ)
         self._env.update(
             {
@@ -156,11 +200,14 @@ class ModeTransaction(unittest.TestCase):
                 "RILL_XRAY_AGENT_CLI": str(self.cli),
                 "RILL_XRAY_AGENT_OBSERVER": str(self.observe),
                 "RILL_XRAY_AGENT_NO_SYSTEMD": "0",
+                "RILL_XRAY_AGENT_ROOT_POLICY_HELPER": str(self.root_policy),
                 "PATH": f"{self.tmp}:/usr/bin:/bin",
                 "RXA_MODE_STATE": str(self.mode_state),
                 "RXA_RUNTIME_STATE": str(self.runtime_state),
                 "RXA_STATUS": str(self.status),
                 "RXA_SYS_STATE": str(self.sys_state),
+                "RXA_ROOT_POLICY_STATE": str(self.root_policy_state),
+                "RXA_ROOT_POLICY_STAGE_STATE": str(self.root_policy_stage_state),
             }
         )
 
@@ -173,12 +220,39 @@ class ModeTransaction(unittest.TestCase):
     def runtime(self) -> str:
         return self.runtime_state.read_text()
 
+    def root_policy_mode(self) -> str:
+        return self.root_policy_state.read_text()
+
+    def root_policy_stage(self) -> str:
+        return self.root_policy_stage_state.read_text()
+
+    def config_stage(self) -> str:
+        return json.loads(self.config.read_text())["routeStage"]
+
     def active(self, unit: str) -> bool:
         return (self.sys_state / "active" / unit).exists()
 
     def apply(self, *args: str) -> int:
         proc = subprocess.run(
             ["bash", "-c", f'source "{MANAGER}"; rxa_apply_mode "$@"', "x", *args],
+            env=self._env,
+            capture_output=True,
+            text=True,
+        )
+        return proc.returncode
+
+    def apply_stage(self, *args: str) -> int:
+        proc = subprocess.run(
+            ["bash", "-c", f'source "{MANAGER}"; rxa_apply_route_stage "$@"', "x", *args],
+            env=self._env,
+            capture_output=True,
+            text=True,
+        )
+        return proc.returncode
+
+    def apply_auto(self, cmd: str) -> int:
+        proc = subprocess.run(
+            ["bash", "-c", f'source "{MANAGER}"; rxa_{cmd} "$@"', "x"],
             env=self._env,
             capture_output=True,
             text=True,
@@ -261,16 +335,22 @@ class ModeTransaction(unittest.TestCase):
         self.assertEqual(self.mode(), "safe-disabled")
 
     def test_switch_to_normal_commits_all_parties(self):
+        # P0-8: the ROOT execution policy must be synced FIRST as part of the
+        # mode transaction, before the Runtime/units are touched.
         self.assertEqual(self.apply("normal"), 0)
         self.assertEqual(self.mode(), "normal")
         self.assertEqual(self.runtime(), "normal")
         self.assertEqual(self.mode_state.read_text(), "normal")
+        self.assertEqual(self.root_policy_mode(), "normal")
 
     def test_runtime_rejection_rolls_back(self):
         self._env["RXA_FORCE_RUNTIME_MODE"] = "1"
         self.assertEqual(self.apply("normal"), 1)
         self.assertEqual(self.mode(), "observe-only")
         self.assertEqual(self.mode_state.read_text(), "observe-only")
+        # P0-8: authority and preference must stay in lockstep; the root
+        # execution policy rolls back to the previous mode too.
+        self.assertEqual(self.root_policy_mode(), "observe-only")
 
     def test_observe_failure_rolls_back(self):
         self._env["RXA_OBSERVE_FAIL"] = "1"
@@ -278,6 +358,16 @@ class ModeTransaction(unittest.TestCase):
         self.assertEqual(self.mode(), "observe-only")
         self.assertEqual(self.runtime(), "observe-only")
         self.assertEqual(self.mode_state.read_text(), "observe-only")
+        self.assertEqual(self.root_policy_mode(), "observe-only")
+
+    def test_missing_root_policy_helper_fails_closed(self):
+        # P0-8: a missing/corrupt root-policy helper aborts the transition
+        # BEFORE any Runtime/unit/config mutation (no half-state).
+        self._env["RXA_ROOT_POLICY_FAIL"] = "1"
+        self.assertEqual(self.apply("normal"), 1)
+        self.assertEqual(self.mode(), "observe-only")
+        self.assertEqual(self.runtime(), "observe-only")
+        self.assertEqual(self.root_policy_mode(), "observe-only")
 
     def test_invalid_mode_rejected(self):
         self.assertEqual(self.apply("bogus"), 64)
@@ -289,6 +379,73 @@ class ModeTransaction(unittest.TestCase):
         self._env["RXA_SYSCTL_FAIL_UNITS"] = "rill-xray-agent-agent.service rill-xray-agent-xray-observe.path rill-xray-agent-xray-observe.timer"
         self.assertNotEqual(self.apply("observe-only"), 0)
         self.assertEqual(self.mode(), "observe-only")
+        self.assertEqual(self.root_policy_mode(), "observe-only")
+
+    def test_route_stage_commits_all_parties(self):
+        # P0-8: routeStage is a three-party transaction; the root execution
+        # policy (authority) is advanced first and the configured preference
+        # follows. The Runtime shadow is best-effort (never an authority).
+        self.assertEqual(self.apply_stage("assist"), 0)
+        self.assertEqual(self.root_policy_stage(), "assist")
+        self.assertEqual(self.config_stage(), "assist")
+
+    def test_route_stage_root_policy_failure_fails_closed(self):
+        # P0-8: a missing/corrupt root-policy helper aborts the routeStage
+        # transition BEFORE the configured preference changes (no half-state).
+        self._env["RXA_ROOT_POLICY_FAIL"] = "1"
+        self.assertEqual(self.apply_stage("auto"), 1)
+        self.assertEqual(self.root_policy_stage(), "observe")
+        self.assertEqual(self.config_stage(), "observe")
+
+    def test_route_stage_invalid_rejected(self):
+        self.assertEqual(self.apply_stage("bogus"), 64)
+        self.assertFalse(self.config.exists())
+
+    def test_route_stage_same_stage_noop_when_policy_agrees(self):
+        # Re-asserting the same preference is a no-op only when the root
+        # policy already agrees; otherwise the drift is repaired below.
+        self.seed_ready_observe()
+        self.root_policy_stage_state.write_text("assist")
+        self.assertEqual(self.apply_stage("assist"), 0)
+        self.assertEqual(self.root_policy_stage(), "assist")
+        self.assertEqual(self.config_stage(), "assist")
+
+    def test_route_stage_drift_repaired_when_policy_disagrees(self):
+        # Preference says assist but the root policy still says observe:
+        # the transition must repair the root policy to match.
+        self.seed_ready_observe()
+        self.config.write_text(
+            json.dumps({"schemaVersion": 1, "mode": "normal", "routeAssistEnabled": False,
+                        "boundedAutoAllowed": False, "routeStage": "assist"})
+        )
+        self.assertEqual(self.apply_stage("assist"), 0)
+        self.assertEqual(self.root_policy_stage(), "assist")
+        self.assertEqual(self.config_stage(), "assist")
+
+    def test_auto_confirm_requires_auto_stage(self):
+        # P0-8: real auto authority comes from root-policy confirm-auto, but
+        # it is refused unless the configured routeStage preference is auto.
+        self.seed_ready_observe()
+        self.assertEqual(self.apply_auto("apply_auto_confirm"), 64)
+
+    def test_auto_confirm_after_stage_auto(self):
+        self.seed_ready_observe()
+        self.config.write_text(
+            json.dumps({"schemaVersion": 1, "mode": "normal", "routeAssistEnabled": False,
+                        "boundedAutoAllowed": False, "routeStage": "auto"})
+        )
+        self.assertEqual(self.apply_auto("apply_auto_confirm"), 0)
+        self.assertEqual(self.apply_auto("apply_auto_revoke"), 0)
+        self.assertEqual(self.apply_auto("acknowledge_fuse"), 0)
+
+    def test_auto_confirm_fails_closed_on_missing_helper(self):
+        self.seed_ready_observe()
+        self.config.write_text(
+            json.dumps({"schemaVersion": 1, "mode": "normal", "routeAssistEnabled": False,
+                        "boundedAutoAllowed": False, "routeStage": "auto"})
+        )
+        self._env["RXA_ROOT_POLICY_FAIL"] = "1"
+        self.assertEqual(self.apply_auto("apply_auto_confirm"), 1)
 
 
 if __name__ == "__main__":

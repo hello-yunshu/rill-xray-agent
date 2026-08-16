@@ -40,8 +40,14 @@ from .route_contract import (ALLOWED_OPS, INDEX_KEYS, MAX_OPERATIONS, MAX_PARAMS
 
 # Fixed production locations (overridable only for tests via env).
 DEFAULT_APPLY_SPOOL_DIR = Path('/var/spool/rill-xray-agent-apply')
+# P0-5: single host contract. The managed Xray config is the real
+# /etc/idleleo/conf/xray/config.json (Xray_bash_onekey layout). There is no
+# second live truth under a Rill-private host mirror.
 DEFAULT_MANAGED_CONFIG_PATH = Path(
-    os.environ.get('RILL_MANAGED_CONFIG', '/etc/rill-xray-agent/host/conf/xray/config.json'))
+    os.environ.get('RILL_MANAGED_CONFIG', '/etc/idleleo/conf/xray/config.json'))
+# P0-9: fixed, allowlisted service name for the live Xray convergence. Never
+# derived from request content or config.
+DEFAULT_XRAY_SERVICE = os.environ.get('RILL_XRAY_SERVICE', 'xray')
 MANAGED_PREFIX = 'rill-managed-'
 ID_RE = re.compile(r'^[A-Za-z0-9_-]{1,128}$')
 
@@ -318,7 +324,8 @@ class RouteExecutor:
 
     def __init__(self, state_root, txn_root, spool_dir=None, release_capabilities=None,
                  managed_config_path=None, xray_bin=None, allowed_producer_uids=None,
-                 root_policy=None, projection_path=None, generation_file=None):
+                 root_policy=None, projection_path=None, generation_file=None,
+                 restart_fn=None, xray_service=None):
         self.state_root = Path(state_root)
         self.txn_root = Path(txn_root)
         self.spool_dir = Path(spool_dir or DEFAULT_APPLY_SPOOL_DIR)
@@ -330,7 +337,8 @@ class RouteExecutor:
         # delivery channel the Runtime consumes.
         self.txn = RootTransaction(self.txn_root,
                                    self.state_root / 'delivery',
-                                   generation_file or DEFAULT_GENERATION_PATH)
+                                   generation_file or DEFAULT_GENERATION_PATH,
+                                   restart_fn=restart_fn)
         from .release_capabilities import ReleaseCapabilities
         self.release = release_capabilities if release_capabilities is not None \
             else ReleaseCapabilities()
@@ -338,6 +346,7 @@ class RouteExecutor:
             managed_config_path or os.environ.get('RILL_MANAGED_CONFIG',
                                                   str(DEFAULT_MANAGED_CONFIG_PATH)))
         self.xray_bin = Path(xray_bin or os.environ.get('RILL_XRAY_BIN', '/usr/local/bin/xray'))
+        self.xray_service = xray_service or DEFAULT_XRAY_SERVICE
         self.allowed_producer_uids = set(allowed_producer_uids) if allowed_producer_uids is not None \
             else {0}
         # Root-authoritative execution policy (§16). The executor NEVER trusts
@@ -346,6 +355,35 @@ class RouteExecutor:
         # re-evaluates risk/allowlist from the live config.
         self.root_policy = root_policy if root_policy is not None else RootExecutionPolicy()
         self.projection_path = Path(projection_path or DEFAULT_PROJECTION_PATH)
+
+    # ---- live Xray convergence (P0-9) --------------------------------
+    def _xray_test(self, path):
+        """Official Xray config validation of a config file. Returns True only
+        when the xray binary validates the given file cleanly."""
+        import subprocess
+        try:
+            probe = subprocess.run(
+                [str(self.xray_bin), 'run', '-test', '-config', str(path)],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+        return probe.returncode == 0
+
+    def restart_xray(self):
+        """Live Xray convergence (P0-9 Phase B): restart + require active.
+        Returns False on any failure so the caller rolls back. The service
+        name is a fixed allowlist, never derived from request/config."""
+        import subprocess
+        for cmd in (['/bin/systemctl', 'restart', self.xray_service],
+                    ['/bin/systemctl', 'is-active', '--quiet', self.xray_service]):
+            try:
+                probe = subprocess.run(cmd, stdout=subprocess.PIPE,
+                                       stderr=subprocess.STDOUT, timeout=30)
+            except (OSError, subprocess.TimeoutExpired):
+                return False
+            if probe.returncode != 0:
+                return False
+        return True
 
     # ---- spool safety -------------------------------------------------
     def check_spool_file(self, path):
@@ -509,9 +547,56 @@ class RouteExecutor:
                 return None
         return None
 
+    def _quarantine(self, path, reason='rejected'):
+        """Preserve an invalid / anomalous / unrecoverable spool entry (P0-11).
+
+        A rejected or unrecoverable request must never be silently discarded
+        and never be re-processed in a loop: it is moved (atomically) into the
+        spool quarantine directory with a reason-stamped name so a human can
+        inspect it. Returns True when quarantined."""
+        try:
+            qdir = self.spool_dir / 'quarantine'
+            qdir.mkdir(parents=True, exist_ok=True)
+            os.replace(path, qdir / f'{path.name}-{reason}-{int(time.time())}')
+            return True
+        except OSError:
+            return False
+
     def apply(self, request=None):
-        """Full constrained execution path. Returns an ApplyResult dict and
-        never raises for expected policy rejections (blocked / rejected)."""
+        """Full constrained execution path (boot/crash-safe spool drain).
+
+        P0-11 ordering: recover an interrupted claim FIRST (a crash/reboot
+        left it), settle it to a terminal marker, THEN claim and process any
+        pending new request. Recovery only materializes durable commit bundles
+        and never re-executes a mutation (idempotent / replay-safe / no double
+        apply). Rejected or unrecoverable entries are quarantined (never
+        silently discarded). Returns the terminal outcome of the last request
+        processed (the recovered claim when no new request is pending).
+        """
+        results = []
+
+        # Phase 1 (P0-11): recover an interrupted claim first.
+        claim_path = self.spool_dir / 'apply.claim'
+        if claim_path.exists():
+            if claim_path.is_symlink():
+                self._quarantine(claim_path, reason='claim-symlink')
+            else:
+                recovered = self._recover_and_report(claim_path)
+                if recovered is not None:
+                    results.append(recovered)
+                    # Terminal outcome durable -> settle the claim so a future
+                    # boot does not re-report it forever.
+                    self._settle_claim(claim_path)
+                else:
+                    # Unrecoverable claim (corrupt / unreadable): quarantine so
+                    # it is preserved for inspection and never silently dropped
+                    # (and never retried in a loop).
+                    self._quarantine(claim_path, reason='claim-unrecoverable')
+                    results.append({'schemaVersion': 1, 'status': 'blocked',
+                                    'blockedBy': ['apply_in_progress'],
+                                    'committedAtEpochSeconds': int(time.time())})
+
+        # Phase 2: then the pending new request.
         try:
             claim_path, claimed = self._claim()
         except ContractError as exc:
@@ -519,12 +604,18 @@ class RouteExecutor:
             # never process it, surface as rejected.
             return self._error_result(None, None, exc)
         if claimed == 'none':
+            if results:
+                return results[-1]
             return {'schemaVersion': 1, 'status': 'blocked',
                     'blockedBy': ['no_pending_request'],
                     'committedAtEpochSeconds': int(time.time())}
         if claimed == 'in_progress':
-            recovered = self._recover_and_report(self.spool_dir / 'apply.claim')
+            # A claim appeared between Phase 1 and here (rare): recover/report
+            # and settle it rather than blocking forever.
+            recovered = self._recover_and_report(claim_path)
             if recovered is not None:
+                results.append(recovered)
+                self._settle_claim(claim_path)
                 return recovered
             return {'schemaVersion': 1, 'status': 'blocked',
                     'blockedBy': ['apply_in_progress'],
@@ -563,8 +654,14 @@ class RouteExecutor:
             generation = self.txn.generation()
             if generation != request['configurationGeneration']:
                 return self._blocked_result(request, ['generation_mismatch'])
-            return self._run_transaction(request, claim_path)
+            result = self._run_transaction(request, claim_path)
+            results.append(result)
+            return result
         except Exception as exc:
+            # Rejected: preserve the claimed request for inspection instead of
+            # silently discarding it (P0-11). The finally-block settlement then
+            # becomes a no-op because the claim has already been moved away.
+            self._quarantine(claim_path, reason='rejected')
             return self._error_result(request, claim_path, exc)
         finally:
             self._settle_claim(claim_path)

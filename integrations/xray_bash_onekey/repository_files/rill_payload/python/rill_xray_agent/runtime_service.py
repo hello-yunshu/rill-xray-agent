@@ -17,6 +17,7 @@ from .route_policy import RoutePolicy, evaluate_plan_policy
 from .route_history import RouteHistory
 from .route_topology import RouteTopologyProjection
 from .route_planner import RoutePlanner
+from .route_analyzer import RouteAnalyzer, auto_eligible
 from .route_contract import AUTO_ROUTE_OPS, overall_risk
 from .route_executor import request_digest
 from .auto_policy import AutoPolicy
@@ -25,7 +26,7 @@ from .root_txn import DEFAULT_GENERATION_PATH
 from .errors import UnknownDecisionError
 from .doctor import Doctor
 
-ALLOWED = {'health', 'metrics', 'mode', 'config', 'register', 'rootResult', 'feedback', 'inspect', 'snapshot', 'timeline', 'diagnose', 'routeStatus', 'routeStage', 'routePlan', 'routeApprove', 'routeReject', 'routeHistory', 'autoStatus', 'autoConfirm'}
+ALLOWED = {'health', 'metrics', 'mode', 'config', 'register', 'rootResult', 'feedback', 'inspect', 'snapshot', 'timeline', 'diagnose', 'routeStatus', 'routeStage', 'routePlan', 'routeApprove', 'routeReject', 'routeHistory', 'autoStatus', 'autoConfirm', 'autoProduce'}
 ACCESS_LOG_BYTES = 8 * 1024 * 1024
 MAX_FRAME_BYTES = 1048576
 DEFAULT_OBSERVATION_PATH = '/var/lib/rill-xray-agent-xray/status/xray-observation.json'
@@ -547,6 +548,14 @@ class RuntimeService:
                 if self.auto_policy.snapshot().get('fuseOpen'):
                     self.auto_policy.acknowledge_fuse(True)
                 r['fuseAcknowledged'] = self.auto_policy.snapshot().get('fuseAcknowledged')
+            elif m == 'autoProduce':
+                # Real Bounded-Auto producer (§P0-2/§P0-12): Analyzer ->
+                # Planner -> auto policy -> ApplyRequest(applyType=auto) ->
+                # spool. In the locked release this fails closed
+                # (feature_not_released) and never writes the spool.
+                if not self.acl.write_permitted(peer_uid):
+                    raise ValueError('autoProduce requires privileged peer')
+                r = self._auto_produce(peer_uid)
             else:
                 r = self.state.load()
             return {'schemaVersion': 3, 'requestId': rid, 'ok': True, 'result': r}
@@ -859,6 +868,20 @@ class RuntimeService:
         if not isinstance(policy_snapshot_digest, str) or not policy_snapshot_digest:
             return self._record_approval(
                 rid, now, plan, applied=False, blocked=['root_policy_unavailable'])
+        self._spool_apply_request(rid, plan, canonical_ops, 'manual', decision,
+                                  status, execution_epoch, policy_snapshot_digest)
+        return self._record_approval(
+            rid, now, plan, applied=True, blocked=[], release_gate_open=True)
+
+    def _spool_apply_request(self, rid, plan, canonical_ops, apply_type, decision,
+                             status, execution_epoch, policy_snapshot_digest):
+        """Build an ApplyRequest bound to the CURRENT root-owned execution
+        policy and write it atomically to the apply spool for the root oneshot
+        executor. Shared by the manual approval path and the Bounded-Auto
+        producer. The root executor re-validates epoch + snapshot digest
+        against the live root policy anyway; nothing here is final authority.
+        """
+        now = int(time.time())
         apply_request = {
             'schemaVersion': 2,
             'recommendationId': rid,
@@ -872,7 +895,7 @@ class RuntimeService:
             'semanticFingerprint': (plan.get('semanticFingerprint')
                                     or plan.get('recommendationId') or rid),
             'policySnapshotDigest': policy_snapshot_digest,
-            'applyType': 'manual',
+            'applyType': apply_type,
             'mode': 'normal',
             'effectiveStage': decision['effectiveStage'],
             'releaseSnapshot': {
@@ -889,8 +912,86 @@ class RuntimeService:
         self.apply_spool_dir.mkdir(parents=True, exist_ok=True)
         spool_path = self.apply_spool_dir / 'apply.json'
         atomic_write_json(spool_path, apply_request, 0o640)
-        return self._record_approval(
-            rid, now, plan, applied=True, blocked=[], release_gate_open=True)
+        return apply_request
+
+    def _auto_produce(self, peer_uid):
+        """Real Bounded-Auto producer (§P0-2/§P0-12).
+
+        Analyzer -> Planner -> auto policy -> ApplyRequest(applyType=auto) ->
+        spool. The Runtime consumes ONLY the root-owned safe route-topology
+        projection, which carries the root-authoritative managed-route intent;
+        it never reads the raw Xray config and never invents a selector. The
+        analyzer classifies, the planner turns the Rill-owned intent into
+        typed low-risk ops, and the CONCRETE auto evaluation decides
+        submittability. The root executor independently recomputes every
+        condition against the live root policy / live config; a pass here only
+        means "submittable", never final permission.
+        """
+        now = int(time.time())
+        topology = self._current_topology()
+        # §P0-4: fail closed when the root-owned route-topology projection is
+        # unavailable. The Runtime never synthesizes a config hash; with no
+        # projection no plan gate can be proven, so no auto request may be
+        # produced.
+        if not topology.get('wholeConfigSha256'):
+            err = ValueError('route topology projection unavailable (fail closed)')
+            err.code = 'topology_unavailable'
+            raise err
+        intent = topology.get('managedRouteIntent') or {}
+        analyzer = RouteAnalyzer(topology, intent=intent)
+        rec = analyzer.analyze()
+        rid = rec.get('recommendationId')
+        if not auto_eligible(rec):
+            return {'recommendationId': rid, 'produced': False, 'applyType': None,
+                    'blockedBy': ['auto_not_eligible'],
+                    'recommendationType': rec.get('recommendationType'),
+                    'reasonCode': rec.get('reasonCode')}
+        planner = RoutePlanner(topology, routing=self._routing_rules())
+        actionable, reason, ops = planner.operations_from_recommendation(rec)
+        if not actionable:
+            # §P0-2: never "build an operation to be done". A recommendation
+            # that lacks enough safe intent is advisory-only, never a fake
+            # auto operation.
+            return {'recommendationId': rid, 'produced': False, 'applyType': None,
+                    'blockedBy': ['insufficient-safe-intent'],
+                    'recommendationType': rec.get('recommendationType'),
+                    'reasonCode': reason}
+        plan = planner.plan(operations=ops, recommendation=rec)
+        rid = plan['recommendationId']
+        meta = sanitize_route_plan_meta(plan)
+        try:
+            self.route_history.append({
+                'id': 'plan:' + rid,
+                'eventType': 'plan',
+                'createdAtEpochSeconds': plan['createdAtEpochSeconds'],
+                'expiresAtEpochSeconds': plan['expiresAtEpochSeconds'],
+                **meta,
+            })
+        except ValueError:
+            pass
+        status = self._route_status()
+        decision = self._concrete_route_eval(plan, apply_type='auto',
+                                             operations=ops)
+        if not decision['canAutoApply']:
+            return self._record_approval(rid, now, plan, applied=False,
+                                         blocked=decision['blockedBy'])
+        root_policy = self._read_root_policy()
+        if root_policy is None:
+            return self._record_approval(
+                rid, now, plan, applied=False, blocked=['root_policy_unavailable'])
+        execution_epoch = root_policy.get('executionEpoch')
+        if not isinstance(execution_epoch, int) or isinstance(execution_epoch, bool) \
+                or execution_epoch < 0:
+            return self._record_approval(
+                rid, now, plan, applied=False, blocked=['root_policy_unavailable'])
+        policy_snapshot_digest = root_policy.get('policySnapshotDigest')
+        if not isinstance(policy_snapshot_digest, str) or not policy_snapshot_digest:
+            return self._record_approval(
+                rid, now, plan, applied=False, blocked=['root_policy_unavailable'])
+        self._spool_apply_request(rid, plan, ops, 'auto', decision, status,
+                                  execution_epoch, policy_snapshot_digest)
+        return self._record_approval(rid, now, plan, applied=True, blocked=[],
+                                     release_gate_open=True)
 
     def _record_approval(self, rid, now, plan, applied, blocked, release_gate_open=False):
         """Record an approval decision in the secret-free route history and
