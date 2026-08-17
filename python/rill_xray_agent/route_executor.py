@@ -31,9 +31,12 @@ from pathlib import Path
 
 from .canonical import atomic_write_bytes, canonical_bytes, digest, file_sha256, read_json
 from .errors import ContractError, TransactionError
-from .root_txn import RootTransaction, DEFAULT_GENERATION_PATH
+from .root_txn import (DEFAULT_GENERATION_PATH, RootTransaction,
+                       auto_outcome_id_for)
 from .root_policy import DEFAULT_PROJECTION_PATH, RootExecutionPolicy, RootPolicyIntegrityError
-from .route_analyzer import RECOMMENDATION_TYPES
+from .route_analyzer import RECOMMENDATION_TYPES, RouteAnalyzer
+from .route_planner import RoutePlanner
+from .route_topology import RouteTopologyProjection
 from .route_contract import (ALLOWED_OPS, INDEX_KEYS, MAX_OPERATIONS, MAX_PARAMS,
                              MAX_REQUEST_BYTES, MAX_RULES, OP_PARAM_KEYS, SAFE_CHARS,
                              SHA_RE, managed_rule_id_valid, managed_tag, overall_risk)
@@ -365,7 +368,7 @@ class RouteExecutor:
     def __init__(self, state_root, txn_root, spool_dir=None, release_capabilities=None,
                  managed_config_path=None, xray_bin=None, allowed_producer_uids=None,
                  root_policy=None, projection_path=None, generation_file=None,
-                 restart_fn=None, xray_service=None):
+                 restart_fn=None, xray_service=None, rill_config_path=None):
         self.state_root = Path(state_root)
         self.txn_root = Path(txn_root)
         self.spool_dir = Path(spool_dir or DEFAULT_APPLY_SPOOL_DIR)
@@ -395,6 +398,12 @@ class RouteExecutor:
         # re-evaluates risk/allowlist from the live config.
         self.root_policy = root_policy if root_policy is not None else RootExecutionPolicy()
         self.projection_path = Path(projection_path or DEFAULT_PROJECTION_PATH)
+        # §P0-4: root-owned Rill config path (managed route intent source).
+        # Overridable only for tests via env or the constructor.
+        self.rill_config_path = Path(
+            rill_config_path
+            or os.environ.get('RILL_XRAY_AGENT_RUNTIME_CONFIG',
+                              str(self.DEFAULT_RILL_CONFIG_PATH)))
 
     # ---- live Xray convergence (P0-9) --------------------------------
     def _xray_test(self, path):
@@ -571,6 +580,10 @@ class RouteExecutor:
             self.txn.recover_all()
         except Exception:
             pass
+        # §P0-5: after recovery, reconcile the auto ledger against the durable
+        # terminal outcomes (exactly-once per autoOutcomeId). Never blocks on
+        # a policy/ledger failure here; the following rescan decides safety.
+        self._reconcile_ledger()
         scan = self.txn.scan_recovery_state()
         if any(r.get('recoveryRequired') for r in scan):
             # Still unsafe after recovery (e.g. rollbackUnverified): the host
@@ -578,11 +591,156 @@ class RouteExecutor:
             return ['recovery_required']
         return []
 
+    def _reconcile_ledger(self):
+        """§P0-5: crash-safe exactly-once auto ledger reconciliation.
+
+        Runs after recover_all() settles every interrupted transaction to a
+        durable terminal state. For each auto transaction it reconciles the
+        root-owned auto ledger against the DURABLE terminal outcome so the
+        host outcome, the transaction outcome and the auto ledger can never
+        disagree (§8.3):
+
+          committed           -> record_apply exactly once
+          rolledBack          -> record_rollback exactly once
+          rollbackUnverified  -> never a false apply; the rollback is recorded
+                                 so the consecutive-rollback fuse stays
+                                 conservative (a real crash rollback is never
+                                 silently missed)
+
+        record_apply / record_rollback are idempotent per autoOutcomeId
+        (P0-5), so replaying reconciliation (e.g. on every boot) never
+        double-counts a mutation in the cooldown/rate window and never
+        inflates the fuse. Non-auto transactions never touch the auto ledger.
+        A work dir without a readable request or terminal state is skipped
+        (recovery already classified it).
+        """
+        try:
+            workdirs = sorted(
+                p for p in self.txn_root.iterdir() if p.is_dir() and not p.is_symlink())
+        except OSError:
+            return
+        for w in workdirs:
+            try:
+                request = read_json(w / 'request.json')
+            except Exception:
+                continue
+            if not isinstance(request, dict) or request.get('applyType') != 'auto':
+                continue
+            try:
+                state = read_json(w / 'state.json').get('state')
+            except Exception:
+                continue
+            rid = request.get('recommendationId')
+            aoi = auto_outcome_id_for(request)
+            if state == 'committed':
+                self.root_policy.record_apply(rid, auto_outcome_id=aoi)
+            elif state in ('rolledBack', 'rollbackUnverified'):
+                self.root_policy.record_rollback(auto_outcome_id=aoi)
+
+    # P0-4: root-owned Rill config path (managed route intent source).
+    # The root observer reads this same file for the topology projection.
+    DEFAULT_RILL_CONFIG_PATH = Path(
+        os.environ.get('RILL_XRAY_AGENT_RUNTIME_CONFIG',
+                       '/etc/rill-xray-agent/config.json'))
+
+    def _read_root_intent(self):
+        """§P0-4: read the root-owned managed route intent.
+
+        Reads the root-owned Rill config file and returns the
+        'managedRouteIntent' block. Any missing / unreadable / corrupt /
+        symlink path fails closed to None (never invents an intent). The
+        Runtime has no write access to this path.
+        """
+        path = self.rill_config_path
+        if path.is_symlink() or not path.is_file():
+            return None
+        try:
+            raw = read_json(path)
+        except Exception:
+            return None
+        if not isinstance(raw, dict):
+            return None
+        intent = raw.get('managedRouteIntent')
+        return intent if isinstance(intent, dict) else None
+
+    def _root_intent_proof(self, request):
+        """§P0-4: Root Executor 独立证明 Auto Operation 来自 Root-owned Intent.
+
+        When applyType=auto, the executor independently verifies that the
+        requested operations exactly match what the root-owned managed route
+        intent would produce. Steps:
+          1. Read root-owned managed route intent
+          2. Read live /etc/idleleo/conf/xray/config.json
+          3. Recompute topology projection (same as root observer)
+          4. Run analyzer + planner to derive expected deterministic ops
+          5. Canonicalize expected ops and request ops
+          6. Compare exact canonical digest
+          7. Mismatch => block (auto_intent_mismatch)
+
+        The Runtime (even if compromised) cannot construct a request whose
+        operations differ from the root intent, because the root executor
+        independently recomputes what the intent says and compares byte-stable
+        canonical digests. A missing or unreadable intent also blocks (the
+        root has no intent to authorize against).
+        """
+        if request.get('applyType') != 'auto':
+            return []
+        # 1. Read root-owned managed route intent.
+        intent = self._read_root_intent()
+        if intent is None:
+            return ['auto_intent_unavailable']
+        # 2. Read live managed config.
+        try:
+            if self.managed_config_path.is_symlink() or not self.managed_config_path.is_file():
+                return ['auto_intent_live_config_unreadable']
+            live = read_json(self.managed_config_path)
+        except Exception:
+            return ['auto_intent_live_config_unreadable']
+        routing = (live or {}).get('routing')
+        if not isinstance(routing, dict):
+            return ['auto_intent_live_config_unreadable']
+        # 3. Recompute topology projection (same selector-digest logic as
+        #    the root observer, so the analyzer sees the same rule identities).
+        generation = self.txn.generation()
+        projection = RouteTopologyProjection(
+            routing,
+            config_generation=generation,
+            whole_config_safe_digest=file_sha256(self.managed_config_path),
+            captured_at_epoch_seconds=int(time.time()),
+            intent=intent,
+        ).project()
+        # 4. Run the deterministic analyzer + planner.
+        try:
+            analyzer = RouteAnalyzer(projection, intent=intent)
+            rec = analyzer.analyze()
+        except Exception:
+            return ['auto_intent_analysis_failed']
+        if rec.get('recommendationType') != 'managed-route-intent-restore':
+            # No restore needed -> the expected operations are empty.
+            expected_ops = []
+        else:
+            planner = RoutePlanner(projection)
+            actionable, reason, expected_ops = planner.operations_from_recommendation(rec)
+            if not actionable:
+                expected_ops = []
+        # 5. Canonicalize both.
+        # 6. Compare exact canonical digest.
+        expected_digest = digest(RoutePlanner.canonicalize_operations(expected_ops))
+        request_digest_val = digest(RoutePlanner.canonicalize_operations(
+            request.get('operations') or []))
+        if expected_digest == request_digest_val:
+            return []
+        return ['auto_intent_mismatch']
+
     def _recover_and_report(self, claim_path):
         """A claim already exists: the previous run either crashed mid-way or
         was interrupted. Recover the interrupted transaction (root executor may
         do so) and report the terminal state; never re-execute the mutation."""
         recovered = self.txn.recover_all()
+        # §P0-5: reconcile the auto ledger against the durable terminal
+        # outcomes so host outcome, transaction outcome and auto ledger can
+        # never disagree after a crash recovery.
+        self._reconcile_ledger()
         # Find a terminal outcome for the request that was being claimed.
         if not claim_path.is_file() or claim_path.is_symlink():
             return None
@@ -733,6 +891,15 @@ class RouteExecutor:
             blocked = self._global_recovery_gate()
             if blocked:
                 return self._blocked_result(request, blocked)
+            # §P0-4: Root Executor 独立证明 Auto Operation 来自 Root-owned Intent.
+            # For applyType=auto the executor independently recomputes the
+            # expected operations from the root-owned managed route intent and
+            # compares their canonical digest with the request's operations.
+            # A compromised Runtime cannot construct an allowlisted request
+            # whose operations differ from the root intent.
+            blocked = self._root_intent_proof(request)
+            if blocked:
+                return self._blocked_result(request, blocked)
             result = self._run_transaction(request, claim_path)
             results.append(result)
             return result
@@ -775,18 +942,24 @@ class RouteExecutor:
             return file_sha256(self.managed_config_path) == committed_sha
 
         is_auto = request.get('applyType') == 'auto'
+        # §P0-5: stable auto outcome id (single source: root_txn) so the
+        # ledger records are exactly-once across crash recovery replays.
+        aoi = auto_outcome_id_for(request)
         try:
             # P0-10: the auto ledger record is part of the transaction, not an
             # afterthought. commit_hook/rollback_hook run INSIDE RootTransaction
             # and are durable BEFORE the terminal commit, so a crash can never
             # leave "host changed but no durable ledger record" (or vice versa).
+            # P0-5: the hooks carry autoOutcomeId; AutoPolicy dedups per
+            # outcome id, so repeated recovery reconciliation can never
+            # double-count applies/rollbacks or inflate the fuse.
             # P0-6: the candidate is pre-validated inside the transaction
             # before any live mutation; a failed pre-test aborts with zero
             # host change (candidate_pre_validation_failed).
             result = self.txn.apply(
                 request, self.managed_config_path, apply_fn, verify_fn,
-                commit_hook=(lambda: self.root_policy.record_apply(rid)) if is_auto else None,
-                rollback_hook=(lambda: self.root_policy.record_rollback()) if is_auto else None,
+                commit_hook=(lambda: self.root_policy.record_apply(rid, auto_outcome_id=aoi)) if is_auto else None,
+                rollback_hook=(lambda: self.root_policy.record_rollback(auto_outcome_id=aoi)) if is_auto else None,
                 pre_verify_fn=pre_verify_fn,
                 candidate_bytes=candidate,
             )

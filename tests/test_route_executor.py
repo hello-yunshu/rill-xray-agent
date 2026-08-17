@@ -12,12 +12,13 @@ import stat
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from rill_xray_agent.canonical import atomic_write_json, file_sha256, read_json
 from rill_xray_agent.errors import ContractError
 from rill_xray_agent.release_capabilities import ReleaseCapabilities
 from rill_xray_agent.root_policy import RootExecutionPolicy
-from rill_xray_agent.root_txn import RootTransaction
+from rill_xray_agent.root_txn import RootTransaction, auto_outcome_id_for
 from rill_xray_agent.route_contract import managed_tag
 from rill_xray_agent.route_executor import (
     MAX_REQUEST_BYTES, RouteExecutor, RouteMutationCompiler,
@@ -43,7 +44,8 @@ def managed_config_bytes():
 
 
 def make_executor(td, released=False, xray_ok=True, root_mode='normal',
-                  root_stage='assist', restart_fn=None, **kw):
+                  root_stage='assist', restart_fn=None, auto_confirmed=False,
+                  rill_config_path=None, **kw):
     state_root = Path(td) / 'state'
     txn_root = Path(td) / 'tx'
     spool = Path(td) / 'spool'
@@ -69,6 +71,8 @@ def make_executor(td, released=False, xray_ok=True, root_mode='normal',
         rp.set_mode(root_mode)
     if rp.route_stage() != root_stage:
         rp.set_route_stage(root_stage)
+    if auto_confirmed and not rp.is_auto_confirmed():
+        rp.set_auto_confirmed(True)
 
     ex = RouteExecutor(state_root, txn_root, spool_dir=spool,
                        release_capabilities=caps,
@@ -77,7 +81,8 @@ def make_executor(td, released=False, xray_ok=True, root_mode='normal',
                        root_policy=rp,
                        projection_path=Path(td) / 'proj' / 'execution-policy.json',
                        generation_file=state_root / 'generation',
-                       restart_fn=restart_fn)
+                       restart_fn=restart_fn,
+                       rill_config_path=rill_config_path)
     return ex, mcp, spool
 
 
@@ -546,6 +551,131 @@ class RouteExecutorSecurityTest(unittest.TestCase):
             self.assertEqual(result['status'], 'blocked')
             self.assertIn('effective_stage_not_auto', result['blockedBy'])
 
+    # ---- P0-4: Root Executor 独立证明 Auto Operation 来自 Root-owned Intent ----
+    INTENT_MANAGED_ID = 'route-intent-missing-0001'
+    INTENT_RULE = {
+        'managedRuleId': INTENT_MANAGED_ID,
+        'selectorType': 'domain',
+        'selectorValue': ['intent.example.com'],
+        'outboundTag': 'proxy',
+    }
+
+    @staticmethod
+    def _write_root_intent(path, rules):
+        atomic_write_json(path, {'managedRouteIntent': {'managedRules': rules}})
+
+    @staticmethod
+    def _auto_ops(**over):
+        params = {'managedRuleId': 'route-intent-missing-0001',
+                  'position': 2, 'selectorType': 'domain',
+                  'selectorValue': ['intent.example.com'],
+                  'outboundTag': 'proxy'}
+        params.update(over)
+        return [{'op': 'routingRule.insert', 'managedScope': True, 'params': params}]
+
+    def _auto_request(self, ex, mcp, ops, **kw):
+        return base_request(ex, mcp,
+                            recommendationId='rec-route-auto-0001',
+                            recommendationType='managed-route-intent-restore',
+                            semanticFingerprint='rec-route-auto-0001',
+                            applyType='auto',
+                            effectiveStage='auto',
+                            operations=ops,
+                            **kw)
+
+    def test_missing_root_intent_blocks_auto(self):
+        # §P0-4: an auto request whose root intent is missing / unreadable is
+        # blocked (auto_intent_unavailable). The root has no intent to
+        # authorize against; the request is never executed.
+        with tempfile.TemporaryDirectory() as td:
+            rill_cfg = Path(td) / 'rill-config.json'  # intentionally absent
+            ex, mcp, spool = make_executor(td, released=True, root_stage='auto',
+                                           auto_confirmed=True,
+                                           rill_config_path=rill_cfg)
+            req = self._auto_request(ex, mcp, self._auto_ops())
+            stage_request(ex, spool, req)
+            result = ex.apply()
+            self.assertEqual(result['status'], 'blocked', result)
+            self.assertIn('auto_intent_unavailable', result['blockedBy'])
+            # Zero host mutation.
+            self.assertEqual(file_sha256(mcp), req['sourceConfigSha256'])
+            self.assertEqual(ex.txn.generation(), 0)
+
+    def test_auto_intent_mismatch_blocks_apply(self):
+        # §P0-4 attack scenario: a compromised Runtime constructs a low-risk,
+        # allowlisted auto insert that is NOT what the root-owned intent says
+        # (same selector but wrong outbound). The root executor independently
+        # recomputes the intent-derived ops and rejects the mismatch.
+        with tempfile.TemporaryDirectory() as td:
+            rill_cfg = Path(td) / 'rill-config.json'
+            self._write_root_intent(rill_cfg, [self.INTENT_RULE])
+            ex, mcp, spool = make_executor(td, released=True, root_stage='auto',
+                                           auto_confirmed=True,
+                                           rill_config_path=rill_cfg)
+            # Same selector/value but WRONG outbound tag.
+            req = self._auto_request(ex, mcp,
+                                     self._auto_ops(outboundTag='direct'))
+            stage_request(ex, spool, req)
+            result = ex.apply()
+            self.assertEqual(result['status'], 'blocked', result)
+            self.assertIn('auto_intent_mismatch', result['blockedBy'])
+            # Zero host mutation.
+            self.assertEqual(file_sha256(mcp), req['sourceConfigSha256'])
+            self.assertEqual(ex.txn.generation(), 0)
+
+    def test_auto_intent_wrong_managed_id_blocks_apply(self):
+        # §P0-4 attack scenario: same selector/outbound but a DIFFERENT
+        # managedRuleId than the root intent declares -> mismatch -> block.
+        with tempfile.TemporaryDirectory() as td:
+            rill_cfg = Path(td) / 'rill-config.json'
+            self._write_root_intent(rill_cfg, [self.INTENT_RULE])
+            ex, mcp, spool = make_executor(td, released=True, root_stage='auto',
+                                           auto_confirmed=True,
+                                           rill_config_path=rill_cfg)
+            req = self._auto_request(
+                ex, mcp, self._auto_ops(managedRuleId='route-intent-other-9999'))
+            stage_request(ex, spool, req)
+            result = ex.apply()
+            self.assertEqual(result['status'], 'blocked', result)
+            self.assertIn('auto_intent_mismatch', result['blockedBy'])
+            self.assertEqual(file_sha256(mcp), req['sourceConfigSha256'])
+
+    def test_auto_intent_extra_operation_blocks_apply(self):
+        # §P0-4 attack scenario: an extra operation appended to the request
+        # (beyond the root intent) -> canonical digest differs -> block.
+        with tempfile.TemporaryDirectory() as td:
+            rill_cfg = Path(td) / 'rill-config.json'
+            self._write_root_intent(rill_cfg, [self.INTENT_RULE])
+            ex, mcp, spool = make_executor(td, released=True, root_stage='auto',
+                                           auto_confirmed=True,
+                                           rill_config_path=rill_cfg)
+            ops = self._auto_ops() + self._auto_ops()
+            req = self._auto_request(ex, mcp, ops)
+            stage_request(ex, spool, req)
+            result = ex.apply()
+            self.assertEqual(result['status'], 'blocked', result)
+            self.assertIn('auto_intent_mismatch', result['blockedBy'])
+            self.assertEqual(file_sha256(mcp), req['sourceConfigSha256'])
+
+    def test_auto_intent_match_allows_apply(self):
+        # §P0-4 happy path: the request's operations EXACTLY match the
+        # canonical intent-derived ops -> the root executor proves the auto
+        # operation comes from root-owned intent and applies it.
+        with tempfile.TemporaryDirectory() as td:
+            rill_cfg = Path(td) / 'rill-config.json'
+            self._write_root_intent(rill_cfg, [self.INTENT_RULE])
+            ex, mcp, spool = make_executor(td, released=True, root_stage='auto',
+                                           auto_confirmed=True,
+                                           rill_config_path=rill_cfg)
+            req = self._auto_request(ex, mcp, self._auto_ops())
+            stage_request(ex, spool, req)
+            result = ex.apply()
+            self.assertEqual(result['status'], 'committed', result)
+            # The managed rule was appended exactly once.
+            cfg = json.loads(mcp.read_text())
+            self.assertEqual(len(cfg['routing']['rules']), 3)
+            self.assertEqual(ex.txn.generation(), 1)
+
     def test_replay_idempotent(self):
         with tempfile.TemporaryDirectory() as td:
             ex, mcp, spool = make_executor(td, released=True)
@@ -673,6 +803,151 @@ class RouteExecutorSecurityTest(unittest.TestCase):
             self.assertIn('claim-symlink', quarantined[0].name)
             self.assertFalse((spool / 'apply.claim').exists())
             self.assertEqual(result['status'], 'blocked')
+
+
+class LedgerReconciliationTest(unittest.TestCase):
+    """P0-5: crash-safe exactly-once auto ledger reconciliation.
+
+    _reconcile_ledger() aligns the root-owned auto ledger with the DURABLE
+    terminal outcome of each auto transaction after recover_all() settles
+    interrupted transactions (§8.3), so host outcome, transaction outcome and
+    auto ledger can never disagree. record_apply / record_rollback are
+    idempotent per autoOutcomeId, so replaying reconciliation (every boot /
+    every apply path) never double-counts a mutation in the cooldown/rate
+    window and never inflates the consecutive-rollback fuse. Non-auto
+    transactions never touch the auto ledger.
+    """
+
+    @staticmethod
+    def _plant(ex, rid, apply_type, state):
+        """Plant a terminal transaction work dir for a given apply type."""
+        w = ex.txn_root / RootTransaction.work_dir_name(rid)
+        w.mkdir(parents=True, exist_ok=True)
+        req = {'recommendationId': rid,
+               'configurationGeneration': ex.txn.generation(),
+               'applyType': apply_type,
+               'requestSha256': 'aa' * 32}
+        atomic_write_json(w / 'request.json', req)
+        atomic_write_json(w / 'state.json',
+                          {'schemaVersion': 1, 'state': state})
+        return w, auto_outcome_id_for(req)
+
+    @staticmethod
+    def _reconcile(ex):
+        # The same entry point the production recovery paths use.
+        return ex._reconcile_ledger()
+
+    def test_committed_auto_records_apply_once(self):
+        with tempfile.TemporaryDirectory() as td:
+            ex, _, _ = make_executor(td, released=True)
+            self._plant(ex, 'rec-ledger-commit-0001', 'auto', 'committed')
+            self._reconcile(ex)
+            s = ex.root_policy.auto.snapshot()
+            self.assertEqual(s['autoMutationsLastHour'], 1)
+            self.assertNotEqual(s['lastAutoAtEpochSeconds'], 0)
+
+    def test_rolled_back_auto_records_rollback(self):
+        # rolledBack and rollbackUnverified are both durable rollback
+        # outcomes: the fuse stays conservative (a real crash rollback is
+        # never silently missed). Never a false apply.
+        with tempfile.TemporaryDirectory() as td:
+            ex, _, _ = make_executor(td, released=True)
+            self._plant(ex, 'rec-ledger-rollback-0001', 'auto', 'rolledBack')
+            self._plant(ex, 'rec-ledger-rollback-0002', 'auto',
+                        'rollbackUnverified')
+            self._reconcile(ex)
+            s = ex.root_policy.auto.snapshot()
+            self.assertEqual(s['consecutiveRollbacks'], 2)
+            self.assertEqual(s['autoMutationsLastHour'], 0)
+
+    def test_duplicate_reconcile_is_exactly_once(self):
+        with tempfile.TemporaryDirectory() as td:
+            ex, _, _ = make_executor(td, released=True)
+            rid = 'rec-ledger-idempotent-0001'
+            self._plant(ex, rid, 'auto', 'committed')
+            self._reconcile(ex)
+            first = ex.root_policy.auto.snapshot()
+            self.assertEqual(first['autoMutationsLastHour'], 1)
+            # Replaying reconciliation must not double-count the same outcome.
+            self._reconcile(ex)
+            self._reconcile(ex)
+            second = ex.root_policy.auto.snapshot()
+            self.assertEqual(second['autoMutationsLastHour'], 1)
+            self.assertEqual(second['lastAutoAtEpochSeconds'],
+                             first['lastAutoAtEpochSeconds'])
+
+    def test_duplicate_reconcile_does_not_inflate_fuse(self):
+        with tempfile.TemporaryDirectory() as td:
+            ex, _, _ = make_executor(td, released=True)
+            self._plant(ex, 'rec-ledger-fuse-0001', 'auto',
+                        'rollbackUnverified')
+            self._reconcile(ex)
+            self._reconcile(ex)
+            self._reconcile(ex)
+            s = ex.root_policy.auto.snapshot()
+            # Same single rollback outcome -> fuse count stays 1, never 3.
+            self.assertEqual(s['consecutiveRollbacks'], 1)
+
+    def test_non_auto_transaction_never_touches_ledger(self):
+        with tempfile.TemporaryDirectory() as td:
+            ex, _, _ = make_executor(td, released=True)
+            self._plant(ex, 'rec-ledger-manual-0001', 'manual', 'committed')
+            self._plant(ex, 'rec-ledger-manual-0002', 'manual', 'rolledBack')
+            self._reconcile(ex)
+            s = ex.root_policy.auto.snapshot()
+            self.assertEqual(s['autoMutationsLastHour'], 0)
+            self.assertEqual(s['consecutiveRollbacks'], 0)
+            self.assertEqual(s['lastAutoAtEpochSeconds'], 0)
+
+    def test_apply_then_crash_rollback_records_both_independently(self):
+        # The same outcome id may legitimately appear in BOTH dedup sets (an
+        # apply recorded, then a crash-forced rollback of the same outcome).
+        # Reconciliation must record both without weakening the fuse or
+        # double-counting either side.
+        with tempfile.TemporaryDirectory() as td:
+            ex, _, _ = make_executor(td, released=True)
+            rid = 'rec-ledger-both-0001'
+            self._plant(ex, rid, 'auto', 'committed')
+            self._reconcile(ex)
+            # The host later rolls back the same outcome after a crash; the
+            # durable terminal becomes rolledBack.
+            self._plant(ex, rid, 'auto', 'rolledBack')
+            self._reconcile(ex)
+            s = ex.root_policy.auto.snapshot()
+            self.assertEqual(s['autoMutationsLastHour'], 1)
+            self.assertEqual(s['consecutiveRollbacks'], 1)
+
+    def test_reconcile_after_recovery_matches_ledger(self):
+        """End-to-end: an interrupted auto transaction is recovered to a
+        durable rolledBack terminal by the global recovery gate, then the
+        ledger is reconciled and matches the transaction outcome exactly
+        once; replaying recovery is a no-op."""
+        with tempfile.TemporaryDirectory() as td:
+            ex, mcp, _ = make_executor(td, released=True)
+            gen = ex.txn.generation()
+            w = ex.txn_root / RootTransaction.work_dir_name('rec-ledger-crash-0001')
+            w.mkdir(parents=True, exist_ok=True)
+            req = {'recommendationId': 'rec-ledger-crash-0001',
+                   'configurationGeneration': gen, 'applyType': 'auto',
+                   'requestSha256': 'bb' * 32}
+            atomic_write_json(w / 'request.json', req)
+            atomic_write_json(w / 'backup-metadata.json',
+                              {'managedExisted': True, 'managedPath': str(mcp),
+                               'oldGeneration': gen, 'newGeneration': gen + 1})
+            (w / 'managed.backup').write_bytes(managed_config_bytes())
+            atomic_write_json(w / 'state.json',
+                              {'schemaVersion': 1, 'state': 'applied'})
+            # The Runtime recovery path: the global gate recovers + reconciles.
+            self.assertEqual(ex._global_recovery_gate(), [])
+            # Transaction recovered to a durable rolledBack terminal.
+            self.assertEqual(read_json(w / 'state.json')['state'], 'rolledBack')
+            # Ledger now matches: one rollback outcome recorded exactly once.
+            self.assertEqual(
+                ex.root_policy.auto.snapshot()['consecutiveRollbacks'], 1)
+            # Replaying the recovery+reconcile path is a no-op (idempotent).
+            self.assertEqual(ex._global_recovery_gate(), [])
+            self.assertEqual(
+                ex.root_policy.auto.snapshot()['consecutiveRollbacks'], 1)
 
 
 if __name__ == '__main__':
