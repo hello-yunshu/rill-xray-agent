@@ -64,6 +64,25 @@ def fault(point: str):
         raise TransactionError(f'fault injected at {point}')
 
 
+def auto_outcome_id_for(request):
+    """§P0-5: stable, deterministic auto outcome id — single source of truth.
+
+    A given auto request ALWAYS maps to the same outcome id, so recovery /
+    ledger reconciliation replaying the same request is idempotent
+    (exactly-once ledger). Bound to requestSha256 + recommendationId +
+    configurationGeneration; None for non-auto requests. The request body is
+    already digest-anchored (requestSha256), so this id can never be forged
+    by a party that cannot produce the request.
+    """
+    if not isinstance(request, dict) or request.get('applyType') != 'auto':
+        return None
+    return digest({
+        'recommendationId': request.get('recommendationId'),
+        'configurationGeneration': request.get('configurationGeneration'),
+        'requestSha256': request.get('requestSha256'),
+    })
+
+
 class RootTransaction:
     def __init__(self, root, delivery, generation_file, restart_fn=None):
         self.root = Path(root)
@@ -115,13 +134,22 @@ class RootTransaction:
         _ensure_runtime_readable(p, _TXN_ARTIFACT_MODE)
 
     def _build_bundle(self, w, did, request, old, terminal, outcome):
+        # §P0-5: autoOutcomeId — stable unique identifier for this auto outcome
+        # that guarantees exactly-once ledger reconciliation during crash
+        # recovery. Derived from the request so it's deterministic and
+        # idempotent (single source of truth: auto_outcome_id_for).
+        auto_outcome_id = auto_outcome_id_for(request)
         body = {'schemaVersion': 2, 'decisionId': did, 'outcome': outcome,
                 'observedAtEpochSeconds': int(time.time()), 'configurationGeneration': old,
-                'nextConfigurationGeneration': old + 1 if terminal == 'committed' else old}
+                'nextConfigurationGeneration': old + 1 if terminal == 'committed' else old,
+                'autoOutcomeId': auto_outcome_id,
+                'applyType': request.get('applyType')}
         result = {**body, 'resultSha256': digest(body)}
         receipt = {'schemaVersion': 1, 'decisionId': did, 'resultSha256': result['resultSha256'],
                    'transactionSha256': digest({'request': request, 'result': result}),
-                   'createdAtEpochSeconds': int(time.time())}
+                   'createdAtEpochSeconds': int(time.time()),
+                   'autoOutcomeId': auto_outcome_id,
+                   'applyType': request.get('applyType')}
         base = {'schemaVersion': 1, 'terminalState': terminal,
                 'nextConfigurationGeneration': result['nextConfigurationGeneration'],
                 'result': result, 'receipt': receipt,
