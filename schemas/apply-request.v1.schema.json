@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "apply-request.v1.schema.json",
-  "title": "Route Apply Request",
-  "description": "Root-executor input (schemaVersion 2). The executor re-validates the whole envelope against the CURRENT release manifest, the CURRENT managed config digest/generation AND the CURRENT root execution policy/epoch; nothing in the request is trusted by itself. executionEpoch / policySnapshotDigest bind the request to the root-authoritative authorization state (§12/§24).",
+  "title": "Route Apply Request (v1 legacy)",
+  "description": "LEGACY compat schema for schemaVersion 1 apply requests. New apply requests use schemaVersion 2 and MUST validate against apply-request.v2.schema.json (which carries the P0-1 managedRuleId identity contract and the full recommendationType enum). This schema is retained only for legacy readers; the production machine boundary is v2.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -13,7 +13,7 @@
     "effectiveStage", "releaseSnapshot", "operations", "requestSha256"
   ],
   "properties": {
-    "schemaVersion": {"type": "integer", "enum": [2]},
+    "schemaVersion": {"type": "integer", "enum": [1]},
     "recommendationId": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"},
     "createdAtEpochSeconds": {"type": "integer"},
     "expiresAtEpochSeconds": {"type": "integer"},

@@ -17,19 +17,24 @@ from rill_xray_agent.canonical import atomic_write_json, file_sha256
 from rill_xray_agent.errors import ContractError
 from rill_xray_agent.release_capabilities import ReleaseCapabilities
 from rill_xray_agent.root_policy import RootExecutionPolicy
+from rill_xray_agent.route_contract import managed_tag
 from rill_xray_agent.route_executor import (
     MAX_REQUEST_BYTES, RouteExecutor, RouteMutationCompiler,
     request_digest, validate_apply_request)
 
 
 def managed_config_bytes():
+    # P0-1: the live managed rule carries the deterministic tag derived from
+    # the root-owned stable managedRuleId, so a replace operation can verify
+    # the live identity == requested managedRuleId (TOCTOU / index-drift).
+    managed_id = 'route-managed-0001'
     return json.dumps({
         'log': {'loglevel': 'warning'},
         'routing': {
             'rules': [
                 {'type': 'field', 'domain': ['user.example.com'],
                  'outboundTag': 'direct'},
-                {'tag': 'rill-managed-aaa111', 'type': 'field',
+                {'tag': managed_tag(managed_id), 'type': 'field',
                  'domain': ['managed.example.com'], 'outboundTag': 'proxy'},
             ],
         },
@@ -37,7 +42,7 @@ def managed_config_bytes():
 
 
 def make_executor(td, released=False, xray_ok=True, root_mode='normal',
-                  root_stage='assist', **kw):
+                  root_stage='assist', restart_fn=None, **kw):
     state_root = Path(td) / 'state'
     txn_root = Path(td) / 'tx'
     spool = Path(td) / 'spool'
@@ -70,13 +75,15 @@ def make_executor(td, released=False, xray_ok=True, root_mode='normal',
                        allowed_producer_uids=[os.geteuid()],
                        root_policy=rp,
                        projection_path=Path(td) / 'proj' / 'execution-policy.json',
-                       generation_file=state_root / 'generation')
+                       generation_file=state_root / 'generation',
+                       restart_fn=restart_fn)
     return ex, mcp, spool
 
 
 def base_request(ex, mcp, **kw):
     ops = [{'op': 'routingRule.insert', 'managedScope': True,
-            'params': {'position': 1, 'selectorType': 'domain',
+            'params': {'managedRuleId': 'route-test-managed-0001',
+                       'position': 1, 'selectorType': 'domain',
                        'selectorValue': ['new.example.com'], 'outboundTag': 'proxy'}}]
     req = {
         'schemaVersion': 2,
@@ -148,7 +155,8 @@ class ApplyRequestValidationTest(unittest.TestCase):
             ex, mcp, _ = make_executor(td)
             req = base_request(ex, mcp)
             req['operations'] = [{'op': 'routingRule.insert',
-                                  'params': {'position': 0, 'selectorType': 'domain',
+                                  'params': {'managedRuleId': 'route-test-oversized',
+                                             'position': 0, 'selectorType': 'domain',
                                              'selectorValue': ['x' * (MAX_REQUEST_BYTES // 2)],
                                              'outboundTag': 'p'}}] * 40
             req['requestSha256'] = request_digest(req)
@@ -160,7 +168,8 @@ class ApplyRequestValidationTest(unittest.TestCase):
             ex, mcp, _ = make_executor(td)
             req = base_request(ex, mcp)
             req['operations'] = [{'op': 'routingRule.insert', 'managedScope': True,
-                                  'params': {'position': 0, 'selectorType': 'domain',
+                                  'params': {'managedRuleId': 'route-test-nested',
+                                             'position': 0, 'selectorType': 'domain',
                                              'selectorValue': ['x.com'],
                                              'outboundTag': 'p', 'nested': {'a': {'b': 1}}}}]
             req['requestSha256'] = request_digest(req)
@@ -190,7 +199,8 @@ class ApplyRequestValidationTest(unittest.TestCase):
             for bad in ('/etc/shadow', '/tmp/x', '; rm -rf /', '$(id)', 'a\nb'):
                 req = base_request(ex, mcp)
                 req['operations'] = [{'op': 'routingRule.insert', 'managedScope': True,
-                                      'params': {'position': 0, 'selectorType': 'domain',
+                                      'params': {'managedRuleId': 'route-test-arbitrary',
+                                                 'position': 0, 'selectorType': 'domain',
                                                  'selectorValue': [bad], 'outboundTag': 'p'}}]
                 req['requestSha256'] = request_digest(req)
                 with self.assertRaises(ContractError):
@@ -214,7 +224,8 @@ class ApplyRequestValidationTest(unittest.TestCase):
             req = base_request(ex, mcp)
             value = 'vless://u@h:443/k'
             req['operations'] = [{'op': 'routingRule.insert', 'managedScope': True,
-                                  'params': {'position': 0, 'selectorType': 'domain',
+                                  'params': {'managedRuleId': 'route-test-secret',
+                                             'position': 0, 'selectorType': 'domain',
                                              'selectorValue': [value],
                                              'outboundTag': 'p'}}]
             req['requestSha256'] = request_digest(req)
@@ -235,7 +246,8 @@ class RouteMutationCompilerTest(unittest.TestCase):
     def test_insert_managed_rule(self):
         c = RouteMutationCompiler(self._config(), [
             {'op': 'routingRule.insert', 'managedScope': True,
-             'params': {'position': 1, 'selectorType': 'domain',
+             'params': {'managedRuleId': 'route-test-insert-0001',
+                        'position': 1, 'selectorType': 'domain',
                         'selectorValue': ['new.example.com'], 'outboundTag': 'proxy'}}])
         out = c.compile()
         self.assertEqual(len(out['routing']['rules']), 3)
@@ -248,7 +260,8 @@ class RouteMutationCompilerTest(unittest.TestCase):
         orig = json.dumps(cfg['routing']['rules'][0], sort_keys=True)
         c = RouteMutationCompiler(cfg, [
             {'op': 'routingRule.insert', 'managedScope': True,
-             'params': {'position': 0, 'selectorType': 'domain',
+             'params': {'managedRuleId': 'route-test-insert-0002',
+                        'position': 0, 'selectorType': 'domain',
                         'selectorValue': ['x.com'], 'outboundTag': 'proxy'}}])
         out = c.compile()
         self.assertEqual(json.dumps(out['routing']['rules'][1], sort_keys=True), orig)
@@ -274,7 +287,8 @@ class RouteMutationCompilerTest(unittest.TestCase):
         cfg = self._config()
         c = RouteMutationCompiler(cfg, [
             {'op': 'routingRule.replaceManaged', 'managedScope': True,
-             'params': {'ruleIndex': 1, 'selectorType': 'ip',
+             'params': {'managedRuleId': 'route-managed-0001',
+                        'ruleIndex': 1, 'selectorType': 'ip',
                         'selectorValue': ['10.0.0.0/8'], 'outboundTag': 'direct'}}])
         out = c.compile()
         rule = out['routing']['rules'][1]
@@ -287,7 +301,7 @@ class RouteMutationCompilerTest(unittest.TestCase):
             {'op': 'routingRule.moveManaged', 'managedScope': True,
              'params': {'fromIndex': 1, 'toIndex': 0}}])
         out = c.compile()
-        self.assertEqual(out['routing']['rules'][0]['tag'], 'rill-managed-aaa111')
+        self.assertEqual(out['routing']['rules'][0]['tag'], managed_tag('route-managed-0001'))
 
     def test_move_user_rule_fails_closed(self):
         cfg = self._config()
@@ -305,14 +319,16 @@ class RouteMutationCompilerTest(unittest.TestCase):
         with self.assertRaises(ContractError):
             RouteMutationCompiler({'routing': {}}, [
                 {'op': 'routingRule.insert', 'managedScope': True,
-                 'params': {'position': 0, 'selectorType': 'domain',
+                 'params': {'managedRuleId': 'route-test-no-rules',
+                            'position': 0, 'selectorType': 'domain',
                             'selectorValue': ['x.com'], 'outboundTag': 'p'}}])
 
     def test_never_emits_shell_strings(self):
         cfg = self._config()
         c = RouteMutationCompiler(cfg, [
             {'op': 'routingRule.insert', 'managedScope': True,
-             'params': {'position': 1, 'selectorType': 'domain',
+             'params': {'managedRuleId': 'route-test-shell-0001',
+                        'position': 1, 'selectorType': 'domain',
                         'selectorValue': ['a.com'], 'outboundTag': 'proxy'}}])
         out = c.compile()
         # Output is a JSON object, never a shell command string.
@@ -342,17 +358,58 @@ class RouteExecutorSecurityTest(unittest.TestCase):
             cfg = json.loads(mcp.read_text())
             self.assertEqual(len(cfg['routing']['rules']), 3)
 
-    def test_verify_fail_rolls_back(self):
+    def test_invalid_candidate_never_touches_live_config(self):
+        # §P0-6: an invalid candidate must be rejected by pre-validation BEFORE
+        # any live mutation. With the fake xray failing `-test`, the candidate
+        # pre-test fails first: zero host write, zero generation, zero ledger,
+        # no work dir left behind, and NO rollback (nothing was mutated).
         with tempfile.TemporaryDirectory() as td:
             ex, mcp, spool = make_executor(td, released=True, xray_ok=False)
             before = file_sha256(mcp)
             req = base_request(ex, mcp)
             stage_request(ex, spool, req)
             result = ex.apply()
+            self.assertEqual(result['status'], 'rejected', result)
+            self.assertTrue(any('candidate pre-validation failed' in b for b in result['blockedBy']),
+                            result['blockedBy'])
+            # Live config bytes are untouched (no host mutation at all).
+            self.assertEqual(file_sha256(mcp), before)
+            self.assertEqual(mcp.read_text().encode(), managed_config_bytes())
+            # Generation and ledger are unchanged.
+            self.assertEqual(ex.txn.generation(), 0)
+            self.assertFalse(ex.root_policy.snapshot()['fuseOpen'])
+            # No work dir / candidate / bundle left behind (nothing was applied).
+            # Only the single-flight lock file may exist.
+            from rill_xray_agent.root_txn import RootTransaction
+            work = ex.txn_root / RootTransaction.work_dir_name(req['recommendationId'])
+            self.assertFalse(work.exists())
+
+    def test_restart_failure_rolls_back(self):
+        # §P0-6/§P0-9: candidate is valid (pre-test passes) but the live Xray
+        # restart fails -> the host is rolled back to the pre-apply bytes and
+        # the generation is restored. The rollback's own restore-restart
+        # succeeds so the rollback is fully verified.
+        with tempfile.TemporaryDirectory() as td:
+            calls = {'n': 0}
+
+            def restart_fn():
+                calls['n'] += 1
+                # First restart (apply convergence) fails; the second
+                # (rollback restore convergence) succeeds.
+                return calls['n'] > 1
+
+            ex, mcp, spool = make_executor(td, released=True, xray_ok=True,
+                                           restart_fn=restart_fn)
+            before = file_sha256(mcp)
+            req = base_request(ex, mcp)
+            stage_request(ex, spool, req)
+            result = ex.apply()
             self.assertEqual(result['status'], 'rolledBack', result)
-            # Bytes restored exactly.
             self.assertEqual(file_sha256(mcp), before)
             self.assertEqual(ex.txn.generation(), 0)
+            # The candidate WAS pre-validated (one restart attempt happened),
+            # then the apply restart failed and the rollback restored.
+            self.assertEqual(calls['n'], 2)
 
     def test_config_hash_mismatch_fails_closed(self):
         with tempfile.TemporaryDirectory() as td:

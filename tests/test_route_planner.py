@@ -123,11 +123,26 @@ class RoutePlannerTest(unittest.TestCase):
         self.assertEqual(digest({'operations': a}), digest({'operations': b}))
 
     def test_risk_low_for_insert_end(self):
+        # P0-8: Auto V1 low-risk insert is STRICTLY append-only. position must
+        # equal len(rules); out-of-range positions (e.g. 99) are rejected as
+        # high risk, never silently clamped to append.
+        rules = make_topology()['rules']
         p = RoutePlanner(make_topology()).plan([
             {'op': 'routingRule.insert',
-             'params': {'position': 99, 'selectorType': 'domain',
+             'params': {'managedRuleId': 'route-test-insert-end',
+                        'position': len(rules), 'selectorType': 'domain',
                         'selectorValue': ['z.com'], 'outboundTag': 'proxy'}}], now=1)
         self.assertEqual(p['risk'], 'low')
+
+    def test_risk_high_for_out_of_range_insert(self):
+        # P0-8: an insert position beyond len(rules) is not silently clamped to
+        # append; it is high risk (and the executor rejects it outright).
+        rules = make_topology()['rules']
+        p = RoutePlanner(make_topology()).plan([
+            {'op': 'routingRule.insert',
+             'params': {'position': len(rules) + 10, 'selectorType': 'domain',
+                        'selectorValue': ['z.com'], 'outboundTag': 'proxy'}}], now=1)
+        self.assertEqual(p['risk'], 'high')
 
     def test_risk_medium_for_replace_selector_type_change(self):
         p = RoutePlanner(make_topology()).plan([
