@@ -36,7 +36,7 @@ from .root_policy import DEFAULT_PROJECTION_PATH, RootExecutionPolicy, RootPolic
 from .route_analyzer import RECOMMENDATION_TYPES
 from .route_contract import (ALLOWED_OPS, INDEX_KEYS, MAX_OPERATIONS, MAX_PARAMS,
                              MAX_REQUEST_BYTES, MAX_RULES, OP_PARAM_KEYS, SAFE_CHARS,
-                             SHA_RE, overall_risk)
+                             SHA_RE, managed_rule_id_valid, managed_tag, overall_risk)
 
 # Fixed production locations (overridable only for tests via env).
 DEFAULT_APPLY_SPOOL_DIR = Path('/var/spool/rill-xray-agent-apply')
@@ -177,6 +177,14 @@ def _validate_operation(op):
     unknown = set(params) - OP_PARAM_KEYS[opname]
     if unknown:
         raise ContractError('unsafe operation params')
+    # P0-1: insert / replaceManaged MUST bind the root-owned stable
+    # managedRuleId. The executor derives the deterministic Xray tag from it,
+    # so identity between root intent and the live rule can never drift. A
+    # request that omits it is rejected (no legacy hash-of-params identity).
+    if opname in ('routingRule.insert', 'routingRule.replaceManaged'):
+        managed_id = params.get('managedRuleId')
+        if not managed_rule_id_valid(managed_id):
+            raise ContractError(f'{opname} requires valid managedRuleId')
     for key, value in params.items():
         if key in INDEX_KEYS:
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
@@ -246,9 +254,27 @@ class RouteMutationCompiler:
             raise ContractError(f'{opname}: rule {index} is not Rill-managed')
         return rule
 
+    def _managed_identity(self, rule, opname):
+        """Stable managed identity of a live rule as recorded in the AST.
+
+        P0-1: a live Rill-managed rule carries the deterministic tag derived
+        from the root-owned managedRuleId. The identity check uses the tag as
+        recorded on the live rule; callers compare it against the requested
+        managedRuleId's deterministic tag."""
+        tag = rule.get('tag') if isinstance(rule, dict) else None
+        return tag if isinstance(tag, str) and tag.startswith(self.managed_prefix) else None
+
     def _new_tag(self, op):
-        material = canonical_bytes({'op': op.get('op'), 'params': op.get('params')})
-        return self.managed_prefix + hashlib.sha256(material).hexdigest()[:12]
+        # P0-1: the tag is deterministically derived from the root-owned
+        # managedRuleId ONLY, never from position / selector / generation, so
+        # the identity between root intent and live rule can never drift.
+        # Validation already requires managedRuleId for insert/replaceManaged;
+        # this fails closed rather than falling back to a hash-of-params tag.
+        params = op.get('params') if isinstance(op.get('params'), dict) else {}
+        managed_id = params.get('managedRuleId')
+        if not managed_rule_id_valid(managed_id):
+            raise ContractError(f'{op.get("op")}: missing valid managedRuleId')
+        return managed_tag(managed_id)
 
     def _new_rule(self, op):
         params = op['params']
@@ -275,9 +301,12 @@ class RouteMutationCompiler:
             params = op['params']
             if opname == 'routingRule.insert':
                 position = params.get('position', len(rules))
-                if not isinstance(position, int) or position < 0:
-                    raise ContractError('insert position invalid')
-                position = min(position, len(rules))
+                # P0-8: no silent clamp. Only 0 <= position <= len(rules) is
+                # valid; an out-of-range position is rejected (999999 must not
+                # silently become append).
+                if (not isinstance(position, int) or isinstance(position, bool)
+                        or position < 0 or position > len(rules)):
+                    raise ContractError('insert position out of range')
                 rules.insert(position, self._new_rule(op))
             elif opname == 'routingRule.removeManaged':
                 index = params['ruleIndex']
@@ -286,6 +315,15 @@ class RouteMutationCompiler:
             elif opname == 'routingRule.replaceManaged':
                 index = params['ruleIndex']
                 rule = self._managed_index(rules, index, opname)
+                # P0-1: when the op binds a managedRuleId, verify the live rule
+                # at ruleIndex actually carries that exact identity (TOCTOU /
+                # index-drift protection) before mutating it.
+                requested_id = params.get('managedRuleId')
+                if managed_rule_id_valid(requested_id):
+                    expected = managed_tag(requested_id)
+                    if self._managed_identity(rule, opname) != expected:
+                        raise ContractError(
+                            f'replaceManaged: rule {index} identity != managedRuleId')
                 selector_type = params.get('selectorType')
                 selector_value = params.get('selectorValue')
                 if selector_type in ('domain', 'ip', 'port', 'network', 'protocol', 'source'):
@@ -301,10 +339,12 @@ class RouteMutationCompiler:
                 from_index = params['fromIndex']
                 to_index = params['toIndex']
                 rule = self._managed_index(rules, from_index, opname)
-                if not isinstance(to_index, int) or to_index < 0:
-                    raise ContractError('move toIndex invalid')
+                # P0-8: no silent clamp. toIndex must be within the rule range.
+                if (not isinstance(to_index, int) or isinstance(to_index, bool)
+                        or to_index < 0 or to_index > len(rules)):
+                    raise ContractError('move toIndex out of range')
                 del rules[from_index]
-                rules.insert(min(to_index, len(rules)), rule)
+                rules.insert(to_index, rule)
             else:
                 raise ContractError('unsupported operation')
         return out
@@ -673,22 +713,26 @@ class RouteExecutor:
             text, request['operations'])
         compiled = compiler.compile()
         committed_sha = digest(compiled)
+        # §P0-6: the compiled candidate is validated by the official Xray
+        # binary BEFORE the live config is ever touched. The candidate bytes
+        # are the exact bytes that will be atomically written on PASS.
+        candidate = canonical_bytes(compiled)
+
+        def pre_verify_fn(candidate_path):
+            # §P0-6: official `xray run -test -config candidate.json` against
+            # the CANDIDATE (never the live file). Never writes the host and
+            # never restarts Xray: a failed pre-test is a zero-mutation abort.
+            return self._xray_test(candidate_path)
 
         def apply_fn():
-            atomic_write_bytes(self.managed_config_path, canonical_bytes(compiled), 0o640)
+            atomic_write_bytes(self.managed_config_path, candidate, 0o640)
 
         def verify_fn():
-            # Xray official validation of the candidate managed config.
-            import subprocess
-            try:
-                probe = subprocess.run(
-                    [str(self.xray_bin), 'run', '-test', '-config', str(self.managed_config_path)],
-                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
-            except (OSError, subprocess.TimeoutExpired):
-                return False
-            if probe.returncode != 0:
-                return False
-            # The committed file must equal the compiled bytes exactly.
+            # §P0-6 post-restart validation: the committed live file must equal
+            # the compiled candidate exactly. Live validity is independently
+            # proven by restart + is-active (Xray refuses to start on an
+            # invalid config); the byte check anchors the file we actually
+            # wrote to the candidate that was pre-validated.
             return file_sha256(self.managed_config_path) == committed_sha
 
         is_auto = request.get('applyType') == 'auto'
@@ -697,10 +741,15 @@ class RouteExecutor:
             # afterthought. commit_hook/rollback_hook run INSIDE RootTransaction
             # and are durable BEFORE the terminal commit, so a crash can never
             # leave "host changed but no durable ledger record" (or vice versa).
+            # P0-6: the candidate is pre-validated inside the transaction
+            # before any live mutation; a failed pre-test aborts with zero
+            # host change (candidate_pre_validation_failed).
             result = self.txn.apply(
                 request, self.managed_config_path, apply_fn, verify_fn,
                 commit_hook=(lambda: self.root_policy.record_apply(rid)) if is_auto else None,
                 rollback_hook=(lambda: self.root_policy.record_rollback()) if is_auto else None,
+                pre_verify_fn=pre_verify_fn,
+                candidate_bytes=candidate,
             )
         except TransactionError as exc:
             # Generation mismatch / conflict / verify-fail rollback already

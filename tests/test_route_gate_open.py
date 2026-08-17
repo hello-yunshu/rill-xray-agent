@@ -69,6 +69,24 @@ ROOT_POLICY_AUTO = {'schemaVersion': 1, 'policySnapshotDigest': 'bb' * 32,
                     'policy': {'schemaVersion': 1, 'mode': 'normal',
                                'routeStage': 'auto', 'executionEpoch': 3}}
 
+# §P0-2: the root-owned auto authority, AFTER an explicit root confirm-auto
+# (the Xray manager flow). The Runtime must read autoConfirmed / fuse / rate /
+# cooldown EXCLUSIVELY from this projection; Runtime-local autoConfirm is a
+# legacy display-only preference and must never decide execution. The harness
+# acts as the ROOT manager, so it writes the confirmed projection instead of
+# calling the Runtime autoConfirm handler (which would fake a sync).
+ROOT_POLICY_AUTO_CONFIRMED = {
+    'schemaVersion': 1, 'policySnapshotDigest': 'bb' * 32,
+    'policy': {'schemaVersion': 1, 'mode': 'normal', 'routeStage': 'auto',
+               'executionEpoch': 3, 'integrity': 'valid', 'corruptReason': None,
+               'autoConfirmed': True, 'autoConfirmedAtEpochSeconds': 1700000000,
+               'fuseOpen': False, 'fuseAcknowledged': False,
+               'fuseOpenedAtEpochSeconds': None, 'consecutiveRollbacks': 0,
+               'consecutiveRollbackFuseLimit': 2, 'autoMutationsLastHour': 0,
+               'maxAutoMutationsPerHour': 3,
+               'globalCooldownRemainingSeconds': 0, 'lastAutoAtEpochSeconds': 0},
+}
+
 
 def _envelope(method, body):
     return {'schemaVersion': 3, 'requestId': 'gate-open-1',
@@ -136,7 +154,7 @@ class GateOpenService:
         self._write_topology()
 
     def _write_root_policy(self, epoch, policy=None):
-        p = dict(policy or ROOT_POLICY)
+        p = json.loads(json.dumps(policy or ROOT_POLICY))
         p['policy']['executionEpoch'] = epoch
         self.root_proj.write_text(json.dumps(p, sort_keys=True))
 
@@ -162,18 +180,22 @@ class GateOpenService:
 
     def enable_auto_mode(self):
         """Privileged transitions to auto mode: mode=normal + routeStage=auto
-        + explicit root auto confirmation."""
+        + explicit ROOT auto confirmation (the Xray manager flow).
+
+        §P0-2: the Runtime is never the auto authority. The harness simulates
+        the root manager by writing the confirmed root-owned execution-policy
+        projection (autoConfirmed=true + a healthy auto ledger) rather than
+        calling the Runtime autoConfirm handler, which only updates the legacy
+        Runtime-local preference and must never decide execution."""
         for method, body in (('mode', {'mode': 'normal'}),
                              ('routeStage', {'stage': 'auto'})):
             out = self.svc.handle(_envelope(method, body), peer_uid=self.uid)
             if not out['ok']:
                 raise AssertionError(f'{method} failed: {out}')
-        # Root-owned policy projection must reflect routeStage=auto so the
-        # Runtime binds the current epoch / policy snapshot digest correctly.
-        self._write_root_policy(epoch=3, policy=ROOT_POLICY_AUTO)
-        out = self.svc.handle(_envelope('autoConfirm', {}), peer_uid=self.uid)
-        if not out['ok']:
-            raise AssertionError(f'autoConfirm failed: {out}')
+        # Root-owned policy projection reflects routeStage=auto AND the root
+        # auto confirmation + ledger, so the Runtime binds the current epoch /
+        # policy snapshot digest / auto gates from the root truth source.
+        self._write_root_policy(epoch=3, policy=ROOT_POLICY_AUTO_CONFIRMED)
 
     def auto_produce(self, intent=None):
         """Run the real Bounded-Auto producer against the current projection."""
