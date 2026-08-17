@@ -83,6 +83,10 @@ class CliDispatchTest(unittest.TestCase):
                     (['inspect', 'deadbeef' * 8], 0),
                     (['timeline'], 0),
                     (['mode', 'observe-only'], 0),
+                    (['route-status'], 0),
+                    (['route-history'], 0),
+                    (['auto-status'], 0),
+                    (['auto-produce'], 0),
                     (['feedback', 'deadbeef' * 8, '--outcome', 'resolved',
                       '--helpful', 'true', '--diagnosis-correct', 'true'], 0),
                 ]

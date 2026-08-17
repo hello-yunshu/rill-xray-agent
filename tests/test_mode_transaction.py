@@ -158,6 +158,7 @@ UNITS = (
     "rill-xray-agent-agent.service",
     "rill-xray-agent-xray-observe.path",
     "rill-xray-agent-xray-observe.timer",
+    "rill-xray-agent-auto-evaluate.path",
 )
 
 
@@ -325,12 +326,13 @@ class ModeTransaction(unittest.TestCase):
     def test_safe_disabled_repeat_converges_and_stays_disabled(self):
         self.seed_ready_observe("safe-disabled")
         for u in ("rill-xray-agent-agent.service", "rill-xray-agent-xray-observe.path",
-                  "rill-xray-agent-xray-observe.timer"):
+                  "rill-xray-agent-xray-observe.timer", "rill-xray-agent-auto-evaluate.path"):
             (self.sys_state / "active" / u).unlink()
         self.assertEqual(self.apply("safe-disabled"), 0)
         self.assertFalse(self.active("rill-xray-agent-agent.service"))
         self.assertFalse(self.active("rill-xray-agent-xray-observe.path"))
         self.assertFalse(self.active("rill-xray-agent-xray-observe.timer"))
+        self.assertFalse(self.active("rill-xray-agent-auto-evaluate.path"))
         self.assertEqual(self.apply("safe-disabled"), 0)
         self.assertEqual(self.mode(), "safe-disabled")
 
@@ -376,7 +378,7 @@ class ModeTransaction(unittest.TestCase):
     def test_same_mode_unit_activation_failure_rolls_back(self):
         self.seed_ready_observe()
         (self.sys_state / "active" / "rill-xray-agent-agent.service").unlink()
-        self._env["RXA_SYSCTL_FAIL_UNITS"] = "rill-xray-agent-agent.service rill-xray-agent-xray-observe.path rill-xray-agent-xray-observe.timer"
+        self._env["RXA_SYSCTL_FAIL_UNITS"] = "rill-xray-agent-agent.service rill-xray-agent-xray-observe.path rill-xray-agent-xray-observe.timer rill-xray-agent-auto-evaluate.path"
         self.assertNotEqual(self.apply("observe-only"), 0)
         self.assertEqual(self.mode(), "observe-only")
         self.assertEqual(self.root_policy_mode(), "observe-only")
