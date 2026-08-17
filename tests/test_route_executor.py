@@ -13,10 +13,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from rill_xray_agent.canonical import atomic_write_json, file_sha256
+from rill_xray_agent.canonical import atomic_write_json, file_sha256, read_json
 from rill_xray_agent.errors import ContractError
 from rill_xray_agent.release_capabilities import ReleaseCapabilities
 from rill_xray_agent.root_policy import RootExecutionPolicy
+from rill_xray_agent.root_txn import RootTransaction
 from rill_xray_agent.route_contract import managed_tag
 from rill_xray_agent.route_executor import (
     MAX_REQUEST_BYTES, RouteExecutor, RouteMutationCompiler,
@@ -380,7 +381,6 @@ class RouteExecutorSecurityTest(unittest.TestCase):
             self.assertFalse(ex.root_policy.snapshot()['fuseOpen'])
             # No work dir / candidate / bundle left behind (nothing was applied).
             # Only the single-flight lock file may exist.
-            from rill_xray_agent.root_txn import RootTransaction
             work = ex.txn_root / RootTransaction.work_dir_name(req['recommendationId'])
             self.assertFalse(work.exists())
 
@@ -410,6 +410,64 @@ class RouteExecutorSecurityTest(unittest.TestCase):
             # The candidate WAS pre-validated (one restart attempt happened),
             # then the apply restart failed and the rollback restored.
             self.assertEqual(calls['n'], 2)
+
+    def test_recovery_required_blocks_new_apply(self):
+        # §P0-7: an existing rollbackUnverified transaction anywhere in the
+        # root transaction area blocks a new (otherwise valid) apply. The
+        # unprivileged Runtime has no write access to this area, so the gate
+        # cannot be bypassed even by a compromised Runtime.
+        with tempfile.TemporaryDirectory() as td:
+            ex, mcp, spool = make_executor(td, released=True)
+            # Plant an unverified-rollback transaction that recovery CANNOT
+            # finish (no backup/request metadata -> stays rollbackUnverified).
+            w = ex.txn_root / RootTransaction.work_dir_name('rec-stuck-0001')
+            w.mkdir(parents=True, exist_ok=True)
+            atomic_write_json(w / 'state.json',
+                              {'schemaVersion': 1, 'state': 'rollbackUnverified'})
+            # An otherwise-valid staged request.
+            req = base_request(ex, mcp)
+            stage_request(ex, spool, req)
+            result = ex.apply()
+            self.assertEqual(result['status'], 'blocked', result)
+            self.assertIn('recovery_required', result['blockedBy'])
+            # Host untouched (zero mutation).
+            self.assertEqual(file_sha256(mcp), req['sourceConfigSha256'])
+            self.assertEqual(ex.txn.generation(), 0)
+
+    def test_interrupted_txn_recovered_before_apply(self):
+        # §P0-7: an intermediate (prepared) transaction is recovered FIRST;
+        # only after the transaction area is globally safe may the new apply
+        # proceed and commit.
+        with tempfile.TemporaryDirectory() as td:
+            ex, mcp, spool = make_executor(td, released=True)
+            gen = ex.txn.generation()
+            # Plant an interrupted 'prepared' transaction that never mutated
+            # the host (backup == current live bytes); recovery must roll it
+            # back to a verified rolledBack terminal.
+            w = ex.txn_root / RootTransaction.work_dir_name('rec-interrupted-0001')
+            w.mkdir(parents=True, exist_ok=True)
+            atomic_write_json(w / 'request.json',
+                              {'recommendationId': 'rec-interrupted-0001',
+                               'configurationGeneration': gen})
+            atomic_write_json(w / 'backup-metadata.json',
+                              {'managedExisted': True, 'managedPath': str(mcp),
+                               'oldGeneration': gen, 'newGeneration': gen + 1})
+            (w / 'managed.backup').write_bytes(managed_config_bytes())
+            atomic_write_json(w / 'state.json',
+                              {'schemaVersion': 1, 'state': 'prepared'})
+            req = base_request(ex, mcp)
+            stage_request(ex, spool, req)
+            result = ex.apply()
+            # The interrupted txn was recovered (rolled back, host bytes
+            # unchanged) and the new apply then committed cleanly.
+            self.assertEqual(result['status'], 'committed', result)
+            self.assertEqual(ex.txn.generation(), 1)
+            # The interrupted work dir now carries a verified rolledBack
+            # terminal (recovered, not re-applied).
+            self.assertEqual(
+                read_json(w / 'state.json')['state'], 'rolledBack')
+            cfg = json.loads(mcp.read_text())
+            self.assertEqual(len(cfg['routing']['rules']), 3)
 
     def test_config_hash_mismatch_fails_closed(self):
         with tempfile.TemporaryDirectory() as td:

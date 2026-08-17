@@ -548,6 +548,36 @@ class RouteExecutor:
         except (ValueError, OSError):
             return []
 
+    def _global_recovery_gate(self):
+        """§P0-7: global recovery gate — final authority for "may a new
+        mutation start".
+
+        Before ANY new apply the executor scans the WHOLE root transaction
+        area. Any transaction in an intermediate / unverified / corrupt /
+        incomplete state means the host may hold a partially-applied or
+        unverified outcome; the Runtime cannot bypass this because it has no
+        write access to the root transaction area. The executor (root) may
+        recover first; only after the area is globally safe may a new apply
+        proceed. If recovery cannot make the area safe, the new apply is
+        BLOCKED (recovery_required) — never allowed on top of an unsafe host.
+        """
+        scan = self.txn.scan_recovery_state()
+        if not any(r.get('recoveryRequired') for r in scan):
+            return []
+        # A crash/interrupt left an unfinished transaction: the root executor
+        # is allowed to recover it. Recover is idempotent and replay-safe
+        # (never re-executes a mutation).
+        try:
+            self.txn.recover_all()
+        except Exception:
+            pass
+        scan = self.txn.scan_recovery_state()
+        if any(r.get('recoveryRequired') for r in scan):
+            # Still unsafe after recovery (e.g. rollbackUnverified): the host
+            # must be reconciled by a human/operator before any new mutation.
+            return ['recovery_required']
+        return []
+
     def _recover_and_report(self, claim_path):
         """A claim already exists: the previous run either crashed mid-way or
         was interrupted. Recover the interrupted transaction (root executor may
@@ -694,6 +724,15 @@ class RouteExecutor:
             generation = self.txn.generation()
             if generation != request['configurationGeneration']:
                 return self._blocked_result(request, ['generation_mismatch'])
+            # §P0-7: global recovery gate — the FINAL authority before any new
+            # mutation. Any unfinished / unverified / corrupt transaction
+            # anywhere in the root transaction area blocks the new apply
+            # (recovery_required) until the host is globally safe. The
+            # unprivileged Runtime has no write access to this area, so the
+            # gate cannot be bypassed by a compromised Runtime.
+            blocked = self._global_recovery_gate()
+            if blocked:
+                return self._blocked_result(request, blocked)
             result = self._run_transaction(request, claim_path)
             results.append(result)
             return result
