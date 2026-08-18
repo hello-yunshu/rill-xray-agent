@@ -21,6 +21,7 @@ available and fully testable without enabling it.
 """
 from __future__ import annotations
 
+import grp
 import hashlib
 import json
 import os
@@ -61,6 +62,15 @@ RUNTIME_ID_GNU = 'rill-runtime'
 RUNTIME_ID_MUSL = 'rill-runtime-musl'
 MODEL_ARTIFACT_ID = 'rillml.example.default'
 HANDLER_ARTIFACT_ID = 'rillml.echo.handler'
+
+# The unprivileged Runtime (User=rill-xray-agent) only ever READS the managed
+# tree to reflect the verified runtime over IPC (§P0-16). Root keeps write
+# ownership; group members get read/traverse via the shared service group,
+# matching the root_txn pattern (0640 state + 0750/2750 dirs + binary).
+RILL_GROUP = 'rill-xray-agent'
+_RILLML_ROOT_MODE = 0o2750
+_RILLML_BIN_MODE = 0o750
+_RILLML_STATE_MODE = 0o640
 
 # --- bounds / security ---
 MAX_INDEX_BYTES = 512 * 1024
@@ -574,6 +584,42 @@ class RillMLRuntimeManager:
     def _current_binary(self):
         return self.current_dir / 'rill-runtime'
 
+    def _ensure_runtime_group_readable(self):
+        """Best-effort group-read access so the unprivileged Runtime (§P0-16)
+        can reflect the verified runtime over IPC.
+
+        Root keeps write ownership; group members (``rill-xray-agent``) get
+        read/traverse on the tree. Directories get setgid so files created by
+        later root lifecycle ops inherit the group. Non-root callers (test
+        sandboxes) cannot chown; chmod is still applied.
+        """
+        if not self.root.exists():
+            return
+        targets = (
+            (self.root, _RILLML_ROOT_MODE),
+            (self.current_dir, _RILLML_ROOT_MODE),
+            (self.rollback_dir, _RILLML_ROOT_MODE),
+            (self.staging_dir, _RILLML_ROOT_MODE),
+            (self.state_path, _RILLML_STATE_MODE),
+            (self.current_dir / 'rill-runtime', _RILLML_BIN_MODE),
+            (self.rollback_dir / 'rill-runtime', _RILLML_BIN_MODE),
+        )
+        for path, mode in targets:
+            try:
+                os.chmod(path, mode)
+            except OSError:
+                pass
+        if os.geteuid() == 0:
+            try:
+                gid = grp.getgrnam(RILL_GROUP).gr_gid
+            except KeyError:
+                return
+            for path, _mode in targets:
+                try:
+                    os.chown(path, 0, gid)
+                except OSError:
+                    pass
+
     def status(self):
         """Local state + platform identity. Never touches the network."""
         try:
@@ -720,6 +766,10 @@ class RillMLRuntimeManager:
             'rollbackArtifactId': state.get('artifactId'),
         })
         self._write_state(state)
+        # The unprivileged Runtime (§P0-16) must be able to reflect the newly
+        # activated runtime over the read-only IPC surface. Activation owns the
+        # tree, so re-assert the group-readable modes here (same as rollback).
+        self._ensure_runtime_group_readable()
 
     def rollback(self):
         """Restore the previous-good runtime into ``current`` (if present)."""
@@ -739,6 +789,7 @@ class RillMLRuntimeManager:
             'rollbackArtifactId': None,
         })
         self._write_state(state)
+        self._ensure_runtime_group_readable()
         return {'rolledBack': True, 'status': self.status()}
 
     def upgrade(self, *, probe='lightweight', timeout=60.0, attempts=4,
