@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "apply-request.v1.schema.json",
+  "title": "Route Apply Request (v1 legacy)",
+  "description": "LEGACY compat schema for schemaVersion 1 apply requests. New apply requests use schemaVersion 2 and MUST validate against apply-request.v2.schema.json (which carries the P0-1 managedRuleId identity contract and the full recommendationType enum). This schema is retained only for legacy readers; the production machine boundary is v2.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "recommendationId", "createdAtEpochSeconds",
+    "expiresAtEpochSeconds", "configurationGeneration", "executionEpoch",
+    "sourceConfigSha256", "planSha256", "recommendationType",
+    "semanticFingerprint", "policySnapshotDigest", "applyType", "mode",
+    "effectiveStage", "releaseSnapshot", "operations", "requestSha256"
+  ],
+  "properties": {
+    "schemaVersion": {"type": "integer", "enum": [1]},
+    "recommendationId": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"},
+    "createdAtEpochSeconds": {"type": "integer"},
+    "expiresAtEpochSeconds": {"type": "integer"},
+    "configurationGeneration": {"type": "integer", "minimum": 0},
+    "executionEpoch": {"type": "integer", "minimum": 0},
+    "sourceConfigSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "planSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "recommendationType": {
+      "type": "string",
+      "enum": [
+        "managed-rule-shadowed",
+        "unreachable-rule",
+        "managed-rule-added",
+        "stale-topology",
+        "no-recommendation"
+      ]
+    },
+    "semanticFingerprint": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"},
+    "policySnapshotDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "applyType": {"type": "string", "enum": ["manual", "auto"]},
+    "mode": {"type": "string", "enum": ["normal", "observe-only", "safe-disabled"]},
+    "effectiveStage": {"type": "string", "enum": ["observe", "assist", "auto", "disabled"]},
+    "releaseSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routeAssist", "boundedAuto"],
+      "properties": {
+        "routeAssist": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["supported", "released"],
+          "properties": {
+            "supported": {"type": "boolean"},
+            "released": {"type": "boolean"}
+          }
+        },
+        "boundedAuto": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["supported", "released"],
+          "properties": {
+            "supported": {"type": "boolean"},
+            "released": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "operations": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["op", "params", "managedScope"],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "routingRule.insert",
+              "routingRule.removeManaged",
+              "routingRule.replaceManaged",
+              "routingRule.moveManaged"
+            ]
+          },
+          "params": {"type": "object", "maxProperties": 8},
+          "managedScope": {"type": "boolean"}
+        }
+      }
+    },
+    "requestSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

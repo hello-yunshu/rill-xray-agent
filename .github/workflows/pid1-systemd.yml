@@ -1,0 +1,45 @@
+name: PID1 Systemd
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  pid1:
+    # Spec §43 "Debian 12 PID1" / "Ubuntu 24.04 PID1": the frozen canonical
+    # payload (with the best-effort RillML prebuilt install) is installed and
+    # driven under a REAL systemd PID1 (Docker --privileged /sbin/init). All
+    # qualification is Docker-only; nothing is compiled here (§1/§73).
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: debian12
+            base: debian:12
+            tag: rill-pid1-debian12
+          - name: ubuntu2404
+            base: ubuntu:24.04
+            tag: rill-pid1-ubuntu2404
+    name: PID1 (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Build systemd PID1 image
+        run: docker build -t "${{ matrix.tag }}" --build-arg BASE="${{ matrix.base }}" ci/pid1
+
+      - name: Run PID1 + RillML suite
+        run: |
+          set -euo pipefail
+          docker run -d --name pid1 --privileged \
+            --mount "type=bind,src=$PWD,dst=/repo,ro" \
+            "${{ matrix.tag }}" /sbin/init
+          trap 'docker rm -f pid1 >/dev/null 2>&1 || true' EXIT
+          for _ in $(seq 1 60); do
+            if docker exec pid1 bash -lc 'test -S /run/systemd/private' 2>/dev/null; then break; fi
+            sleep 1
+          done
+          echo "==> PID1: $(docker exec pid1 bash -c 'ps -p 1 -o comm=')"
+          docker exec -e SRC=/repo/integrations/xray_bash_onekey/repository_files \
+            pid1 bash /repo/qualification/pid1-rillml.sh

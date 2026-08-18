@@ -32,13 +32,14 @@ class Tests(unittest.TestCase):
             root = tmp / "root"
             (root / "conf/xray").mkdir(parents=True)
             (root / "conf/xray/config.json").write_text('{"inbounds":[]}')
-            data = self._observe(tmp, root)
+            data, _ = self._observe(tmp, root)
             self.assertEqual(data["schemaVersion"], 1)
             self.assertTrue(data["xrayConfig"]["present"])
             self.assertIn("services", data)
 
-    def _observe(self, tmp, root):
+    def _observe(self, tmp, root, with_generation=None):
         status = tmp / "status.json"
+        topology = tmp / "route-topology.json"
         history = tmp / "history"
         env = dict(os.environ)
         env["RILL_XRAY_HOST_ROOT"] = str(root)
@@ -46,12 +47,16 @@ class Tests(unittest.TestCase):
         env["RILL_XRAY_AGENT_HISTORY"] = str(history)
         env["RILL_XRAY_AGENT_LOCK"] = str(tmp / ".observer.lock")
         env["RILL_XRAY_AGENT_PYTHON"] = str(ROOT / "python")
+        env["RILL_XRAY_AGENT_TOPOLOGY"] = str(topology)
+        env["RILL_XRAY_AGENT_GENERATION"] = str(tmp / "generation")
+        if with_generation is not None:
+            (tmp / "generation").write_text(f"{with_generation}\n")
         proc = subprocess.run(
             ["python3", str(SCRIPTS / "rill_xray_agent_observe.py")],
             env=env, capture_output=True, text=True,
         )
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        return json.loads(status.read_text())
+        return json.loads(status.read_text()), json.loads(topology.read_text())
 
     def test_nested_file_symlink_fails_closed(self):
         with tempfile.TemporaryDirectory(prefix="rxa-nest-") as tmp:
@@ -61,7 +66,7 @@ class Tests(unittest.TestCase):
             nginx.mkdir(parents=True)
             (nginx / "real.conf").write_text("server {}")
             (nginx / "leak.conf").symlink_to("/etc/shadow")
-            data = self._observe(tmp, root)
+            data, _ = self._observe(tmp, root)
             self.assertEqual(data["nginxConfig"], {"present": True, "safe": False})
 
     def test_nested_directory_symlink_fails_closed(self):
@@ -72,7 +77,7 @@ class Tests(unittest.TestCase):
             nginx.mkdir(parents=True)
             (nginx / "sites").mkdir()
             (nginx / "sites-enabled").symlink_to(nginx / "sites", target_is_directory=True)
-            data = self._observe(tmp, root)
+            data, _ = self._observe(tmp, root)
             self.assertEqual(data["nginxConfig"], {"present": True, "safe": False})
 
     def test_dangling_symlink_fails_closed(self):
@@ -82,7 +87,7 @@ class Tests(unittest.TestCase):
             nginx = root / "conf/nginx"
             nginx.mkdir(parents=True)
             (nginx / "gone.conf").symlink_to("/nonexistent/missing.conf")
-            data = self._observe(tmp, root)
+            data, _ = self._observe(tmp, root)
             self.assertEqual(data["nginxConfig"], {"present": True, "safe": False})
 
     def test_special_file_fails_closed(self):
@@ -92,7 +97,7 @@ class Tests(unittest.TestCase):
             nginx = root / "conf/nginx"
             nginx.mkdir(parents=True)
             os.mkfifo(nginx / "pipe.conf")
-            data = self._observe(tmp, root)
+            data, _ = self._observe(tmp, root)
             self.assertEqual(data["nginxConfig"], {"present": True, "safe": False})
 
     def test_clean_tree_still_safe(self):
@@ -103,13 +108,92 @@ class Tests(unittest.TestCase):
             nginx.mkdir(parents=True)
             (nginx / "a.conf").write_text("server {}")
             (nginx / "b.conf").write_text("server {}")
-            data = self._observe(tmp, root)
+            data, _ = self._observe(tmp, root)
             self.assertTrue(data["nginxConfig"]["safe"])
             self.assertEqual(data["nginxConfig"]["files"], 2)
 
+    def test_observer_writes_secret_free_route_topology_projection(self):
+        # §P0-4: the ROOT observer must emit the safe route-topology projection
+        # (secret-free) carrying the root-owned generation + whole config digest.
+        with tempfile.TemporaryDirectory(prefix="rxa-topo-") as tmp:
+            tmp = Path(tmp)
+            root = tmp / "root"
+            (root / "conf/xray").mkdir(parents=True)
+            (root / "conf/xray/config.json").write_text(json.dumps({
+                "routing": {"rules": [
+                    {"type": "field", "domain": ["user.example.com"],
+                     "outboundTag": "direct"},
+                    {"tag": "rill-managed-a1b2c3", "type": "field",
+                     "domain": ["managed.example.com"], "outboundTag": "proxy"},
+                    {"id": "a92f8c9f-0f4f-4b7c-9d3a-7f8a9b0c1d2e",
+                     "privateKey": "6KzhM9OBsZ0T9c7Vhx4N2mFpR1QvJ5tW8yXbL3eDcG",
+                     "shortId": "abcdef0123456789", "protocol": "reality"},
+                ]},
+            }))
+            _, topo = self._observe(tmp, root, with_generation=7)
+            self.assertEqual(topo["schemaVersion"], 2)
+            # Generation comes from the ROOT-owned generation file (§P0-7).
+            self.assertEqual(topo["configurationGeneration"], 7)
+            self.assertNotIn("configGeneration", topo)
+            self.assertEqual(topo["routingRulesCount"], 3)
+            self.assertEqual(len(topo["rules"]), 3)
+            self.assertEqual(len(topo["wholeConfigSha256"]), 64)
+            blob = repr(topo)
+            for secret in ("a92f8c9f", "privateKey", "shortId", "6KzhM9OB",
+                           "abcdef0123456789", "user.example.com",
+                           "managed.example.com"):
+                self.assertNotIn(secret, blob, f"projection leaked {secret}")
+            # Managed ownership is preserved through the projection.
+            managed = [r["ruleIndex"] for r in topo["rules"] if r["isManaged"]]
+            self.assertEqual(managed, [1])
+
+    def test_observer_projection_fails_closed_on_missing_config(self):
+        # Missing / unparseable Xray config -> EMPTY projection (fail closed),
+        # never a partial leak, and the observer still exits 0.
+        with tempfile.TemporaryDirectory(prefix="rxa-topo-") as tmp:
+            tmp = Path(tmp)
+            root = tmp / "root"
+            (root / "conf/xray").mkdir(parents=True)
+            _, topo = self._observe(tmp, root)
+            self.assertEqual(topo["routingRulesCount"], 0)
+            self.assertEqual(topo["rules"], [])
+            self.assertEqual(topo["configurationGeneration"], 0)
+            self.assertEqual(topo["wholeConfigSha256"], "")
+
+    def test_observer_projection_fails_closed_on_unparseable_config(self):
+        with tempfile.TemporaryDirectory(prefix="rxa-topo-") as tmp:
+            tmp = Path(tmp)
+            root = tmp / "root"
+            (root / "conf/xray").mkdir(parents=True)
+            (root / "conf/xray/config.json").write_text("{not-json")
+            _, topo = self._observe(tmp, root)
+            self.assertEqual(topo["routingRulesCount"], 0)
+            self.assertEqual(topo["rules"], [])
+
+    def test_observe_unit_grants_runtime_readonly_topology(self):
+        # §P0-4: the Runtime service mounts the observer's status tree
+        # (containing the route-topology projection) READ-ONLY via
+        # ReadOnlyPaths, so the Runtime can never write the projection the
+        # root observer produced.
+        runtime = (SYSTEMD / "rill-xray-agent-runtime.service").read_text()
+        ro_line = next(line for line in runtime.splitlines()
+                       if line.startswith("ReadOnlyPaths="))
+        self.assertIn("/var/lib/rill-xray-agent-xray", ro_line)
+
     def test_core_never_mentions_host_identity(self):
+        # §P0-5: the executor's DEFAULT_MANAGED_CONFIG_PATH is the SINGLE
+        # required host contract (/etc/<host>/conf/xray/config.json, where
+        # <host> is the fork identity) and must be present verbatim. No OTHER
+        # core module may hardcode the fork identity — a stray mention would
+        # indicate a second live truth or an accidental host lock-in, which
+        # this test continues to forbid.
         token = "i" + "d" + "l" + "e" + "l" + "e" + "o"
+        host_contract = "/etc/" + token + "/conf/xray/config.json"
+        executor = ROOT / "python/rill_xray_agent/route_executor.py"
+        self.assertIn(host_contract, executor.read_text(errors="ignore"))
         for path in (ROOT / "python/rill_xray_agent").glob("*.py"):
+            if path == executor:
+                continue
             self.assertNotIn(token, path.read_text(errors="ignore").lower(), str(path))
 
     def test_manager_has_transaction_helpers(self):

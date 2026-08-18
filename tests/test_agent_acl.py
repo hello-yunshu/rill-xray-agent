@@ -7,7 +7,7 @@ import time
 import unittest
 from pathlib import Path
 
-from rill_xray_agent.agent_service import AgentService
+from rill_xray_agent.agent_service import ALLOWED, READ_ONLY, AgentService
 from rill_xray_agent.canonical import canonical_bytes
 from rill_xray_agent.runtime_service import RuntimeService
 
@@ -74,6 +74,14 @@ class Tests(unittest.TestCase):
         self.assertFalse(AgentService('/x', allowed_uids=[0, 4242]).method_allowed('health', None))
         self.assertFalse(AgentService('/x', allowed_uids=[0, 4242]).method_allowed('reset', 0))
         self.assertFalse(AgentService('/x', allowed_uids=[4242]).method_allowed('health', 0))
+        # §34/§P0-16: rillmlStatus is a read-only status surface, allowed for any
+        # allowed (unprivileged) peer; never root-only, never an operator write.
+        self.assertTrue(AgentService('/x', allowed_uids=[0, 4242]).method_allowed('rillmlStatus', 4242))
+        self.assertTrue(AgentService('/x', allowed_uids=[0, 4242]).method_allowed('rillmlStatus', 0))
+        self.assertFalse(AgentService('/x', allowed_uids=[0, 4242]).method_allowed('rillmlStatus', None))
+        self.assertFalse(AgentService('/x', allowed_uids=[4242]).method_allowed('rillmlStatus', 0))
+        self.assertIn('rillmlStatus', READ_ONLY)
+        self.assertIn('rillmlStatus', ALLOWED)
 
     def test_agent_allows_operator_write_forbidden_method_from_operator(self):
         with tempfile.TemporaryDirectory() as td:
