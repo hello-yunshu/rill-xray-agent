@@ -20,3 +20,17 @@ class Tests(unittest.TestCase):
    self.assertTrue(out['ok']);self.assertEqual(out['result']['status'],'ready');svc.stop();t.join(timeout=3);self.assertFalse(t.is_alive());self.assertFalse(sock.exists())
  def test_reset_forbidden(self):
   with tempfile.TemporaryDirectory() as td:self.assertFalse(RuntimeService(Path(td)/'s',Path(td)/'t').handle({'schemaVersion':3,'requestId':'x','capability':'route','method':'reset','body':{}})['ok'])
+ def test_rillml_status_fail_closed_when_tree_absent(self):
+  with tempfile.TemporaryDirectory() as td:
+   r=Path(td);svc=RuntimeService(r/'state',r/'tx',rillml_root=r/'rillml',allowed_uids=[os.getuid()])
+   out=svc.handle({'schemaVersion':3,'requestId':'x','capability':'route','method':'rillmlStatus','body':{}})
+   self.assertTrue(out['ok']);res=out['result']
+   self.assertEqual(res['nativeRuntime']['status'],'unavailable')
+   self.assertFalse(res['nativeRuntime']['verified'])
+   self.assertEqual(res['fallback'],'portable-python')
+ def test_rillml_status_never_mutates_tree(self):
+  with tempfile.TemporaryDirectory() as td:
+   r=Path(td);svc=RuntimeService(r/'state',r/'tx',rillml_root=r/'rillml',allowed_uids=[os.getuid()])
+   out=svc.handle({'schemaVersion':3,'requestId':'x','capability':'route','method':'rillmlStatus','body':{}})
+   self.assertTrue(out['ok']);self.assertFalse((r/'rillml').exists())
+

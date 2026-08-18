@@ -50,7 +50,8 @@ def envelope(payload):
 def runtime_artifact(**over):
     art = {
         'kind': 'runtime', 'id': 'rill-runtime', 'version': '1.2.0',
-        'targetOs': 'linux', 'targetArch': 'x86_64', 'runtimeApiVersion': 2,
+        'targetOs': 'linux', 'targetArch': 'x86_64', 'targetLibc': 'gnu',
+        'runtimeApiVersion': 2,
         'url': ('https://github.com/hello-yunshu/rill-ml/releases/download/'
                 'v1.2.0/rill-runtime-1.2.0-linux-x86_64'),
         'size': 123, 'sha256': 'ab' * 32,
@@ -61,7 +62,7 @@ def runtime_artifact(**over):
 
 def make_index(artifacts, channel='stable'):
     payload = {
-        'schemaVersion': 2, 'publisherKeyId': TEST_KEY_ID,
+        'schemaVersion': 3, 'publisherKeyId': TEST_KEY_ID,
         'channel': channel, 'artifacts': artifacts,
     }
     return json.dumps(envelope(payload)).encode()
@@ -156,6 +157,19 @@ class PlatformDetectionTest(unittest.TestCase):
         self.assertEqual(runtime_artifact_id('gnu'), 'rill-runtime')
         self.assertEqual(runtime_artifact_id('musl'), 'rill-runtime-musl')
 
+    def test_arch_normalization_aliases(self):
+        # Local naming is normalized to upstream target names; it is not a
+        # support-matrix declaration (the signed index is the authority).
+        with mock.patch('rill_xray_agent.rillml_artifact.sys.platform', 'linux'), \
+             mock.patch('rill_xray_agent.rillml_artifact._detect_linux_libc', return_value='gnu'):
+            for machine, expected in (
+                    ('riscv64gc', 'riscv64'), ('riscv64', 'riscv64'),
+                    ('ppc64le', 'powerpc64le'), ('loong64', 'loongarch64'),
+                    ('armv7l', 'armv7'), ('armhf', 'armv7'), ('s390x', 's390x')):
+                with mock.patch('rill_xray_agent.rillml_artifact.platform.machine',
+                                return_value=machine):
+                    self.assertEqual(detect_platform()['arch'], expected)
+
 
 class ReleaseIndexParseTest(unittest.TestCase):
     def test_valid_signed_index(self):
@@ -166,31 +180,76 @@ class ReleaseIndexParseTest(unittest.TestCase):
         self.assertEqual(payload['channel'], 'stable')
         self.assertEqual(len(payload['artifacts']), 1)
 
-    def test_real_style_index_with_model_and_handler(self):
-        # The real upstream stable index mixes runtime / model / handler
-        # entries; only runtime entries are platform-bound. This mirrors the
-        # published v1.1.0 stable-index.json shape (verified against upstream).
+    def test_real_style_v3_index_with_target_libc_and_pm_adapter(self):
+        # Mirrors the published v1.2.0 stable-index.json shape (verified against
+        # upstream): schema v3 runtime entries carry targetLibc on Linux, and the
+        # OpenWrt PM adapter is a separate kind that must parse, not be selected
+        # as the runtime.
         model = {
-            'kind': 'model', 'id': 'rillml.example.default', 'version': '1.1.0',
+            'kind': 'model', 'id': 'rillml.example.default', 'version': '1.2.0',
             'runtimeApiVersion': 2,
             'url': ('https://github.com/hello-yunshu/rill-ml/releases/download/'
-                    'v1.1.0/example-default-1.1.0.rillpack'),
+                    'v1.2.0/example-default-1.2.0.rillpack'),
             'size': 456, 'sha256': 'cd' * 32,
         }
         handler = {
-            'kind': 'handler', 'id': 'rillml.echo.handler', 'version': '1.1.0',
-            'runtimeApiVersion': 2, 'handlerApiVersion': 2,
-            'minRuntimeVersion': '1.0.0',
+            'kind': 'handler', 'id': 'rillml.echo.handler', 'version': '1.2.0',
+            'runtimeApiVersion': 2, 'handlerApiVersion': 1,
+            'minRuntimeVersion': '1.2.0',
             'url': ('https://github.com/hello-yunshu/rill-ml/releases/download/'
-                    'v1.1.0/echo-handler-1.1.0.rillhandler'),
+                    'v1.2.0/echo-handler-1.2.0.rillhandler'),
             'size': 789, 'sha256': 'ef' * 32,
         }
-        text = make_index([runtime_artifact(), model, handler])
+        pm_adapter = {
+            'kind': 'pm-adapter', 'id': 'rill-pm-adapter', 'version': '1.2.0',
+            'runtimeApiVersion': 0, 'pmAdapterProtocolVersion': 1,
+            'targetOs': 'linux', 'targetArch': 'x86_64', 'targetLibc': 'musl',
+            'url': ('https://github.com/hello-yunshu/rill-ml/releases/download/'
+                    'v1.2.0/rill-pm-adapter-1.2.0-linux-x86_64-musl'),
+            'size': 789, 'sha256': 'ab' * 32,
+        }
+        text = make_index([runtime_artifact(), model, handler, pm_adapter])
         payload = parse_release_index(
             text.decode(), trusted_key_id=TEST_KEY_ID,
             public_key_hex=TEST_PUB_HEX, channel='stable')
         kinds = sorted(a['kind'] for a in payload['artifacts'])
-        self.assertEqual(kinds, ['handler', 'model', 'runtime'])
+        self.assertEqual(kinds, ['handler', 'model', 'pm-adapter', 'runtime'])
+        # PM adapter must never be selected as the runtime.
+        art = select_runtime_artifact(payload, target_os='linux',
+                                      target_arch='x86_64', libc='gnu')
+        self.assertEqual(art['kind'], 'runtime')
+        self.assertEqual(art['id'], 'rill-runtime')
+
+    def test_linux_runtime_requires_target_libc(self):
+        # A Linux runtime artifact missing the v3 targetLibc field is malformed.
+        broken = runtime_artifact()
+        del broken['targetLibc']
+        text = make_index([broken])
+        with self.assertRaises(RillMLValidationError):
+            parse_release_index(text.decode(), trusted_key_id=TEST_KEY_ID,
+                                public_key_hex=TEST_PUB_HEX)
+
+    def test_target_libc_exact_match_never_cross_selects(self):
+        # A malformed index labels a GNU build id with targetLibc=musl; the
+        # explicit field must win over the id so a gnu host never selects it.
+        mislabeled = runtime_artifact(id='rill-runtime', targetLibc='musl')
+        idx = {'schemaVersion': 3, 'publisherKeyId': TEST_KEY_ID,
+               'channel': 'stable', 'artifacts': [mislabeled]}
+        with self.assertRaises(RillMLValidationError):
+            select_runtime_artifact(idx, target_os='linux',
+                                    target_arch='x86_64', libc='gnu')
+
+    def test_pm_adapter_requires_protocol_version(self):
+        bad = {'kind': 'pm-adapter', 'id': 'rill-pm-adapter', 'version': '1.2.0',
+               'runtimeApiVersion': 0, 'targetOs': 'linux', 'targetArch': 'x86_64',
+               'targetLibc': 'musl',
+               'url': ('https://github.com/hello-yunshu/rill-ml/releases/download/'
+                       'v1.2.0/rill-pm-adapter-1.2.0-linux-x86_64-musl'),
+               'size': 789, 'sha256': 'ab' * 32}
+        text = make_index([runtime_artifact(), bad])
+        with self.assertRaises(RillMLValidationError):
+            parse_release_index(text.decode(), trusted_key_id=TEST_KEY_ID,
+                                public_key_hex=TEST_PUB_HEX)
 
     def test_runtime_artifact_requires_target_os(self):
         broken = runtime_artifact()
@@ -233,8 +292,10 @@ class ReleaseIndexParseTest(unittest.TestCase):
             parse_release_index(text.decode(), trusted_key_id=TEST_KEY_ID,
                                 public_key_hex=TEST_PUB_HEX, channel='stable')
 
-    def test_schema_version_mismatch_rejected(self):
-        payload = {'schemaVersion': 3, 'publisherKeyId': TEST_KEY_ID,
+    def test_schema_version_not_supported_rejected(self):
+        # v2 is the legacy schema the 1.2.0 contract supersedes; the consumer
+        # only accepts the audited v3 (fail-closed at the schema boundary).
+        payload = {'schemaVersion': 2, 'publisherKeyId': TEST_KEY_ID,
                    'channel': 'stable',
                    'artifacts': [runtime_artifact()]}
         raw = json.dumps(envelope(payload)).encode()
@@ -251,14 +312,15 @@ class ReleaseIndexParseTest(unittest.TestCase):
 
 class ArtifactSelectionTest(unittest.TestCase):
     def _index(self):
-        return {'schemaVersion': 2, 'publisherKeyId': TEST_KEY_ID,
+        return {'schemaVersion': 3, 'publisherKeyId': TEST_KEY_ID,
                 'channel': 'stable', 'artifacts': [
                     runtime_artifact(),
-                    runtime_artifact(id='rill-runtime-musl',
+                    runtime_artifact(id='rill-runtime-musl', targetLibc='musl',
                                      url='https://github.com/hello-yunshu/rill-ml/releases/download/v1.2.0/rill-runtime-1.2.0-linux-x86_64-musl'),
                     runtime_artifact(targetArch='aarch64',
                                      url='https://github.com/hello-yunshu/rill-ml/releases/download/v1.2.0/rill-runtime-1.2.0-linux-aarch64'),
                     runtime_artifact(id='rill-runtime-musl', targetArch='aarch64',
+                                     targetLibc='musl',
                                      url='https://github.com/hello-yunshu/rill-ml/releases/download/v1.2.0/rill-runtime-1.2.0-linux-aarch64-musl'),
                 ]}
 
@@ -285,7 +347,7 @@ class ArtifactSelectionTest(unittest.TestCase):
 
     def test_wrong_libc_rejected(self):
         # Only GNU artifacts present; a musl request must fail closed.
-        idx = {'schemaVersion': 2, 'publisherKeyId': TEST_KEY_ID,
+        idx = {'schemaVersion': 3, 'publisherKeyId': TEST_KEY_ID,
                'channel': 'stable', 'artifacts': [
                    runtime_artifact(),
                    runtime_artifact(targetArch='aarch64',
@@ -464,6 +526,177 @@ class RuntimeManagerLifecycleTest(unittest.TestCase):
             with self.assertRaises(RillMLValidationError):
                 mgr.resolve()
             self.assertFalse(mgr.status()['available'])
+
+    def test_no_downgrade_guard(self):
+        v1 = runtime_artifact(version='1.1.0')
+        v2 = runtime_artifact(version='1.2.0')
+        data1, sha1 = _compute_fixture(v1)
+        data2, sha2 = _compute_fixture(v2)
+        p1 = _patched_artifact(v1, data1, sha1)
+        p2 = _patched_artifact(v2, data2, sha2)
+        index_old = make_index([p1])
+        index_new = make_index([p2])
+
+        def fetch(url, *, timeout, attempts, max_bytes):
+            _validate_https_url(url)
+            if url.endswith('stable-index.json'):
+                return index_old
+            if url == v1['url']:
+                return data1
+            raise RillMLDownloadError('no fixture')
+
+        probe = {'probe': 'lightweight', 'executes': True, 'exitCode': 0}
+        with mock.patch('rill_xray_agent.rillml_artifact._http_get', fetch), \
+             mock.patch('rill_xray_agent.rillml_artifact.detect_platform',
+                        return_value={'os': 'linux', 'arch': 'x86_64', 'libc': 'gnu'}), \
+             mock.patch('rill_xray_agent.rillml_artifact.probe_runtime',
+                        return_value=probe), \
+             tempfile.TemporaryDirectory() as td:
+            mgr = RillMLRuntimeManager(td, public_key_hex=TEST_PUB_HEX,
+                                        trusted_key_id=TEST_KEY_ID)
+            # Install a newer runtime via state manipulation: activate 1.2.0
+            # first by pointing the index at the newer artifact, then refuse to
+            # downgrade to 1.1.0.
+            mgr.install(probe='lightweight')  # activates 1.1.0 from index_old
+            self.assertEqual(mgr.status()['current']['version'], '1.1.0')
+
+        def fetch2(url, *, timeout, attempts, max_bytes):
+            _validate_https_url(url)
+            if url.endswith('stable-index.json'):
+                return index_new
+            if url == v1['url']:
+                return data1
+            if url == v2['url']:
+                return data2
+            raise RillMLDownloadError('no fixture')
+
+        with mock.patch('rill_xray_agent.rillml_artifact._http_get', fetch2), \
+             mock.patch('rill_xray_agent.rillml_artifact.detect_platform',
+                        return_value={'os': 'linux', 'arch': 'x86_64', 'libc': 'gnu'}), \
+             mock.patch('rill_xray_agent.rillml_artifact.probe_runtime',
+                        return_value=probe), \
+             tempfile.TemporaryDirectory() as td:
+            mgr = RillMLRuntimeManager(td, public_key_hex=TEST_PUB_HEX,
+                                        trusted_key_id=TEST_KEY_ID)
+            mgr.install(probe='lightweight')  # activates 1.2.0
+            # Index points back to the older 1.1.0; install/upgrade must refuse.
+            with mock.patch('rill_xray_agent.rillml_artifact.fetch_release_index',
+                            return_value=index_old):
+                with self.assertRaises(RillMLUnsupported):
+                    mgr.install(probe='lightweight')
+                with self.assertRaises(RillMLUnsupported):
+                    mgr.upgrade()
+                # Explicit operator action may downgrade.
+                mgr.install(probe='lightweight', allow_downgrade=True)
+            self.assertEqual(mgr.status()['current']['version'], '1.1.0')
+
+    def test_upgrade_keeps_current_when_already_newest(self):
+        art = runtime_artifact()
+        data, sha = _compute_fixture(art)
+        patched = _patched_artifact(art, data, sha)
+        index = make_index([patched])
+
+        def fetch(url, *, timeout, attempts, max_bytes):
+            _validate_https_url(url)
+            if url.endswith('stable-index.json'):
+                return index
+            if url == art['url']:
+                return data
+            raise RillMLDownloadError('no fixture')
+
+        probe = {'probe': 'lightweight', 'executes': True, 'exitCode': 0}
+        with mock.patch('rill_xray_agent.rillml_artifact._http_get', fetch), \
+             mock.patch('rill_xray_agent.rillml_artifact.detect_platform',
+                        return_value={'os': 'linux', 'arch': 'x86_64', 'libc': 'gnu'}), \
+             mock.patch('rill_xray_agent.rillml_artifact.probe_runtime',
+                        return_value=probe), \
+             tempfile.TemporaryDirectory() as td:
+            mgr = RillMLRuntimeManager(td, public_key_hex=TEST_PUB_HEX,
+                                        trusted_key_id=TEST_KEY_ID)
+            mgr.install(probe='lightweight')
+            result = mgr.upgrade()
+            self.assertFalse(result['upgraded'])
+            self.assertEqual(result['reason'], 'already-current')
+            self.assertEqual(mgr.status()['current']['version'], '1.2.0')
+
+    def test_reinstall_reuses_verified_current(self):
+        art = runtime_artifact()
+        data, sha = _compute_fixture(art)
+        patched = _patched_artifact(art, data, sha)
+        index = make_index([patched])
+
+        def fetch(url, *, timeout, attempts, max_bytes):
+            _validate_https_url(url)
+            if url.endswith('stable-index.json'):
+                return index
+            if url == art['url']:
+                return data
+            raise RillMLDownloadError('no fixture')
+
+        probe = {'probe': 'lightweight', 'executes': True, 'exitCode': 0}
+        with mock.patch('rill_xray_agent.rillml_artifact._http_get', fetch), \
+             mock.patch('rill_xray_agent.rillml_artifact.detect_platform',
+                        return_value={'os': 'linux', 'arch': 'x86_64', 'libc': 'gnu'}), \
+             mock.patch('rill_xray_agent.rillml_artifact.probe_runtime',
+                        return_value=probe), \
+             tempfile.TemporaryDirectory() as td:
+            mgr = RillMLRuntimeManager(td, public_key_hex=TEST_PUB_HEX,
+                                        trusted_key_id=TEST_KEY_ID)
+            mgr.install(probe='lightweight')
+            result = mgr.reinstall()
+            self.assertTrue(result['reused'])
+            self.assertEqual(mgr.status()['current']['version'], '1.2.0')
+
+    def test_native_status_surface(self):
+        # Spec §34: active nativeRuntime carries version/target/runtimeApi.
+        art = runtime_artifact()
+        data, sha = _compute_fixture(art)
+        patched = _patched_artifact(art, data, sha)
+        index = make_index([patched])
+
+        def fetch(url, *, timeout, attempts, max_bytes):
+            _validate_https_url(url)
+            if url.endswith('stable-index.json'):
+                return index
+            if url == art['url']:
+                return data
+            raise RillMLDownloadError('no fixture')
+
+        probe = {'probe': 'lightweight', 'executes': True, 'exitCode': 0}
+        with mock.patch('rill_xray_agent.rillml_artifact._http_get', fetch), \
+             mock.patch('rill_xray_agent.rillml_artifact.detect_platform',
+                        return_value={'os': 'linux', 'arch': 'x86_64', 'libc': 'gnu'}), \
+             mock.patch('rill_xray_agent.rillml_artifact.probe_runtime',
+                        return_value=probe), \
+             tempfile.TemporaryDirectory() as td:
+            mgr = RillMLRuntimeManager(td, public_key_hex=TEST_PUB_HEX,
+                                        trusted_key_id=TEST_KEY_ID)
+            mgr.install(probe='lightweight')
+            surface = mgr.native_status()
+            self.assertEqual(surface['fallback'], 'portable-python')
+            native = surface['nativeRuntime']
+            self.assertEqual(native['status'], 'active')
+            self.assertEqual(native['version'], '1.2.0')
+            self.assertEqual(native['targetOs'], 'linux')
+            self.assertEqual(native['targetArch'], 'x86_64')
+            self.assertEqual(native['targetLibc'], 'gnu')
+            self.assertEqual(native['runtimeApiVersion'], 2)
+            self.assertEqual(native['source'], 'rill-ml-stable-index')
+            self.assertTrue(native['verified'])
+
+    def test_native_status_unavailable_offline(self):
+        # Without an installed runtime the surface is unavailable + portable
+        # fallback, and status() never touches the network.
+        with mock.patch('rill_xray_agent.rillml_artifact.detect_platform',
+                        return_value={'os': 'linux', 'arch': 'x86_64',
+                                      'libc': 'gnu'}), \
+             tempfile.TemporaryDirectory() as td:
+            mgr = RillMLRuntimeManager(td, public_key_hex=TEST_PUB_HEX,
+                                        trusted_key_id=TEST_KEY_ID)
+            surface = mgr.native_status()
+            self.assertEqual(surface['fallback'], 'portable-python')
+            self.assertEqual(surface['nativeRuntime']['status'], 'unavailable')
+            self.assertFalse(surface['nativeRuntime']['verified'])
 
 
 if __name__ == '__main__':

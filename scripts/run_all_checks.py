@@ -20,6 +20,7 @@ commands = [
     ([sys.executable, "scripts/run_python_tests.py"], 180),
     ([sys.executable, "scripts/verify_xray_integration.py"], 90),
     ([sys.executable, "scripts/rust_static_sanity.py"], 30),
+    ([sys.executable, "scripts/verify_no_build_gate.py", "--root", "."], 30),
     ([sys.executable, "scripts/verify_project_memory.py"], 30),
     ([sys.executable, "scripts/verify_package_tree.py"], 30),
     ([sys.executable, "scripts/verify_package_sums.py"], 30),

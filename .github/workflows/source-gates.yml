@@ -13,7 +13,36 @@ jobs:
           persist-credentials: false
       - run: python3 -m pip install jsonschema
       - run: python3 scripts/run_all_checks.py
+      - name: RillML no-downstream-build gate (never compile RillML here, §44)
+        run: python3 scripts/verify_no_build_gate.py --root .
       - run: sudo apt-get update && sudo apt-get install -y shellcheck
       - run: shellcheck --exclude=SC1091 integrations/xray_bash_onekey/repository_files/scripts/*.sh
       - name: Public-history hygiene (paths + known blobs + signatures, all refs/tags)
         run: python3 scripts/verify_public_history_hygiene.py
+
+  rillml-remote:
+    # Spec §43/§45/§46: real stable-index fetch + Ed25519 verification + schema
+    # v3 + real prebuilt download (size/SHA from the signed index) + probe.
+    # gnu runs natively on the x86_64 GNU runner; musl runs in an Alpine
+    # container so the ABI selection path is genuinely exercised. Nothing is
+    # compiled here, ever (§1/§73).
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        libc: [gnu, musl]
+    name: RillML remote consumer (${{ matrix.libc }})
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Stable-index v3 + GNU prebuilt download/probe
+        if: matrix.libc == 'gnu'
+        run: python3 scripts/verify_rillml_remote.py --expect-libc gnu
+      - name: Stable-index v3 + musl prebuilt download/probe (Alpine)
+        if: matrix.libc == 'musl'
+        run: |
+          docker run --rm -v "$PWD":/repo:ro -w /repo \
+            python:3.12-alpine \
+            python3 scripts/verify_rillml_remote.py --expect-libc musl
