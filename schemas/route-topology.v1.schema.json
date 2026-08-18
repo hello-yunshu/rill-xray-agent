@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "route-topology.v1.schema.json",
+  "title": "Route Topology Projection",
+  "type": "object",
+  "required": ["schemaVersion", "capturedAtEpochSeconds", "configurationGeneration", "wholeConfigSha256", "routingRulesCount", "rules"],
+  "properties": {
+    "schemaVersion": {"type": "integer", "enum": [2]},
+    "capturedAtEpochSeconds": {"type": "integer"},
+    "configurationGeneration": {"type": "integer"},
+    "wholeConfigSha256": {"type": "string"},
+    "routingRulesCount": {"type": "integer"},
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["ruleIndex", "ruleKind", "selectorTypes", "selectorDigests", "predicateDigest", "outboundTag", "isManaged", "hasCatchAll", "position"],
+        "properties": {
+          "ruleIndex": {"type": "integer"},
+          "ruleKind": {"type": "string", "enum": ["domain", "ip", "field", "other"]},
+          "selectorTypes": {
+            "type": "array",
+            "items": {"type": "string", "enum": ["domain", "ip", "network", "port", "protocol", "source", "inboundTag", "user", "email"]}
+          },
+          "selectorDigests": {
+            "type": "object",
+            "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+          },
+          "predicateDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "outboundTag": {"type": "string"},
+          "isManaged": {"type": "boolean"},
+          "hasCatchAll": {"type": "boolean"},
+          "position": {"type": "integer"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

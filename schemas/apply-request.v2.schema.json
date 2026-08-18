@@ -1,0 +1,152 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "apply-request.v2.schema.json",
+  "title": "Route Apply Request (v2)",
+  "description": "Root-executor input (schemaVersion 2). The executor re-validates the whole envelope against the CURRENT release manifest, the CURRENT managed config digest/generation AND the CURRENT root execution policy/epoch; nothing in the request is trusted by itself. executionEpoch / policySnapshotDigest bind the request to the root-authoritative authorization state (§12/§24). P0-1: insert / replaceManaged operations MUST bind the root-owned stable managedRuleId so the executor derives the deterministic Xray tag from it (identity between root intent and live rule can never drift).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "recommendationId", "createdAtEpochSeconds",
+    "expiresAtEpochSeconds", "configurationGeneration", "executionEpoch",
+    "sourceConfigSha256", "planSha256", "recommendationType",
+    "semanticFingerprint", "policySnapshotDigest", "applyType", "mode",
+    "effectiveStage", "releaseSnapshot", "operations", "requestSha256"
+  ],
+  "properties": {
+    "schemaVersion": {"type": "integer", "enum": [2]},
+    "recommendationId": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"},
+    "createdAtEpochSeconds": {"type": "integer"},
+    "expiresAtEpochSeconds": {"type": "integer"},
+    "configurationGeneration": {"type": "integer", "minimum": 0},
+    "executionEpoch": {"type": "integer", "minimum": 0},
+    "sourceConfigSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "planSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "recommendationType": {
+      "type": "string",
+      "enum": [
+        "managed-route-intent-restore",
+        "managed-rule-shadowed",
+        "unreachable-rule",
+        "managed-rule-added",
+        "stale-topology",
+        "no-recommendation"
+      ]
+    },
+    "semanticFingerprint": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"},
+    "policySnapshotDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "applyType": {"type": "string", "enum": ["manual", "auto"]},
+    "mode": {"type": "string", "enum": ["normal", "observe-only", "safe-disabled"]},
+    "effectiveStage": {"type": "string", "enum": ["observe", "assist", "auto", "disabled"]},
+    "releaseSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routeAssist", "boundedAuto"],
+      "properties": {
+        "routeAssist": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["supported", "released"],
+          "properties": {
+            "supported": {"type": "boolean"},
+            "released": {"type": "boolean"}
+          }
+        },
+        "boundedAuto": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["supported", "released"],
+          "properties": {
+            "supported": {"type": "boolean"},
+            "released": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "operations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["op", "params", "managedScope"],
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "routingRule.insert",
+              "routingRule.removeManaged",
+              "routingRule.replaceManaged",
+              "routingRule.moveManaged"
+            ]
+          },
+          "managedScope": {"const": true}
+        },
+        "oneOf": [
+          {
+            "properties": {
+              "op": {"const": "routingRule.insert"},
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["managedRuleId", "position", "selectorType", "selectorValue", "outboundTag"],
+                "properties": {
+                  "managedRuleId": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"},
+                  "position": {"type": "integer", "minimum": 0},
+                  "selectorType": {"type": "string", "enum": ["domain", "ip", "port", "network", "protocol", "source"]},
+                  "selectorValue": {"type": ["string", "array"], "items": {"type": "string"}},
+                  "outboundTag": {"type": "string"}
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "op": {"const": "routingRule.removeManaged"},
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["ruleIndex"],
+                "properties": {
+                  "ruleIndex": {"type": "integer", "minimum": 0}
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "op": {"const": "routingRule.replaceManaged"},
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["managedRuleId", "ruleIndex", "selectorType", "selectorValue", "outboundTag"],
+                "properties": {
+                  "managedRuleId": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$"},
+                  "ruleIndex": {"type": "integer", "minimum": 0},
+                  "selectorType": {"type": "string", "enum": ["domain", "ip", "port", "network", "protocol", "source"]},
+                  "selectorValue": {"type": ["string", "array"], "items": {"type": "string"}},
+                  "outboundTag": {"type": "string"}
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "op": {"const": "routingRule.moveManaged"},
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["fromIndex", "toIndex"],
+                "properties": {
+                  "fromIndex": {"type": "integer", "minimum": 0},
+                  "toIndex": {"type": "integer", "minimum": 0}
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "requestSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

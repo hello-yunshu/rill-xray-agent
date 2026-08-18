@@ -5,12 +5,27 @@ RILL_XRAY_AGENT_HOME=${RILL_XRAY_AGENT_HOME:-/etc/rill-xray-agent}
 RILL_XRAY_AGENT_CONFIG=${RILL_XRAY_AGENT_CONFIG:-${RILL_XRAY_AGENT_HOME}/config.json}
 RILL_XRAY_AGENT_STATUS=${RILL_XRAY_AGENT_STATUS:-/var/lib/rill-xray-agent-xray/status/xray-observation.json}
 RILL_XRAY_AGENT_CLI=${RILL_XRAY_AGENT_CLI:-/opt/rill-xray-agent/bin/rill-xray-agent}
+# P0-8: root-authoritative execution-policy helper. The Xray manager (running
+# as root) invokes this for EVERY authority-relevant transition: mode change,
+# routeStage change, auto confirm/revoke, safe-disable, fuse acknowledge and
+# policy reset. The helper bumps executionEpoch on each transition so queued
+# ApplyRequests become stale; the Runtime re-reads the safe projection.
+RILL_XRAY_AGENT_ROOT_POLICY_HELPER=${RILL_XRAY_AGENT_ROOT_POLICY_HELPER:-/opt/rill-xray-agent/bin/rill-xray-agent-root-policy}
 RILL_XRAY_AGENT_HEADER_STATE='AI 判断: 未安装'
 RILL_XRAY_AGENT_HEADER_MODE='工作模式: 不可用'
 RILL_XRAY_AGENT_HEADER_RUNTIME='服务: 未运行'
 RILL_XRAY_AGENT_HEADER_ROUTE='路由辅助: 关闭'
+RILL_XRAY_AGENT_HEADER_AUTO='自动修改: 暂未开放'
 export RILL_XRAY_AGENT_HEADER_STATE RILL_XRAY_AGENT_HEADER_MODE
 export RILL_XRAY_AGENT_HEADER_RUNTIME RILL_XRAY_AGENT_HEADER_ROUTE
+export RILL_XRAY_AGENT_HEADER_AUTO
+# RillML prebuilt native runtime: ROOT-owned lifecycle tree (staging/current/
+# rollback). The manager (root) operates it via the CLI root-only `rillml`
+# subcommand; the Runtime only reflects the verified installed tree through
+# the read-only rillmlStatus IPC surface (never downloads / mutates).
+RILL_XRAY_AGENT_RILLML_ROOT=${RILL_XRAY_AGENT_RILLML_ROOT:-/var/lib/rill-xray-agent-rillml}
+RILL_XRAY_AGENT_HEADER_RILLML='RillML: 未安装'
+export RILL_XRAY_AGENT_RILLML_ROOT RILL_XRAY_AGENT_HEADER_RILLML
 
 rxa_systemctl() {
     [[ ${RILL_XRAY_AGENT_NO_SYSTEMD:-0} == 1 ]] && return 0
@@ -57,6 +72,246 @@ rxa_runtime() {
     # One Runtime config query path. The CLI defaults to the RUNTIME socket
     # (which stays up in every mode); --socket is available for overrides.
     "$RILL_XRAY_AGENT_CLI" --json "$@"
+}
+
+# ---- RillML native runtime lifecycle (root-only, §P0-16) ----------------
+# The manager is the ROOT operator entrypoint for the RillML prebuilt runtime.
+# Lifecycle operations (install/upgrade/reinstall/rollback) directly operate
+# the ROOT-owned tree via the CLI's root-only `rillml` subcommand and NEVER go
+# through the Runtime IPC (the unprivileged Runtime is read-only for RillML).
+# The read-only status surface (rillmlStatus) IS available over IPC and is what
+# the header / status display uses.
+
+rxa_rillml() {
+    # Root-only RillML lifecycle via the single authoritative CLI. The CLI
+    # fails closed with rootRequired when not running as euid 0.
+    "$RILL_XRAY_AGENT_CLI" --json --rillml-root "$RILL_XRAY_AGENT_RILLML_ROOT" rillml "$@"
+}
+
+rxa_rillml_native_status() {
+    # Read-only native-runtime status over the Runtime IPC (unprivileged).
+    # Emits the nativeRuntime surface JSON on stdout; fails closed (1) when
+    # the Runtime is down or the IPC does not answer.
+    rxa_runtime rillml-status
+}
+
+rxa_rillml_state_label() {
+    case "${1:-}" in
+        active) gettext "已启用" ;;
+        unavailable) gettext "未安装" ;;
+        *) gettext "不可用" ;;
+    esac
+}
+
+rxa_rillml_status_display() {
+    # Root view: detailed lifecycle status straight from the authoritative
+    # tree (current / rollback / platform). Read-only; requires root.
+    local out
+    out=$(rxa_rillml status 2>/dev/null) || {
+        printf '%s\n' "$(gettext "RillML 状态读取失败（需要 root 权限）")"
+        return 1
+    }
+    python3 - "${out}" <<'PY'
+import json,sys
+try:
+    d=json.loads(sys.argv[1]); d=d.get('result') or d
+except Exception:
+    print('RillML 状态读取失败'); sys.exit(0)
+cur=d.get('current') or {}
+rb=d.get('rollback') or {}
+plat=d.get('platform') or {}
+if d.get('supported'):
+    print('RillML: %s' % ('已启用' if d.get('available') else '未安装'))
+    print('  目标平台: %s/%s/%s' % (plat.get('os','?'),plat.get('arch','?'),plat.get('libc','?')))
+    print('  已激活版本: %s' % (cur.get('version') or '-'))
+    print('  回滚可用: %s' % (rb.get('version') or '-'))
+else:
+    print('RillML: 不支持 (%s)' % (d.get('unavailableReason') or '?'))
+PY
+}
+
+rxa_rillml_install() {
+    local answer out
+    printf '%s\n' "$(gettext "将下载并安装 RillML 预编译运行时（需联网获取 signed stable index）。")"
+    printf '%s' "$(gettext "确认安装吗？ [y/N]: ")"
+    IFS= read -r answer || answer=""
+    case ${answer} in
+        y|Y|yes|YES|Yes|是) ;;
+        *) printf '%s\n' "$(gettext "已取消。")"; return 0 ;;
+    esac
+    out=$(rxa_rillml install --probe lightweight 2>&1) || { printf '%s\n' "${out}"; printf '%s\n' "$(gettext "RillML 安装失败。")"; return 1; }
+    printf '%s\n' "${out}"
+}
+
+rxa_rillml_upgrade() {
+    local answer out
+    printf '%s\n' "$(gettext "将检查并升级到可用的 RillML 预编译运行时（严格拒绝降级）。")"
+    printf '%s' "$(gettext "确认升级吗？ [y/N]: ")"
+    IFS= read -r answer || answer=""
+    case ${answer} in
+        y|Y|yes|YES|Yes|是) ;;
+        *) printf '%s\n' "$(gettext "已取消。")"; return 0 ;;
+    esac
+    out=$(rxa_rillml upgrade --probe lightweight 2>&1) || { printf '%s\n' "${out}"; printf '%s\n' "$(gettext "RillML 升级失败。")"; return 1; }
+    printf '%s\n' "${out}"
+}
+
+rxa_rillml_reinstall() {
+    local answer out
+    printf '%s\n' "$(gettext "将重新安装当前版本的 RillML 预编译运行时。")"
+    printf '%s' "$(gettext "确认重新安装吗？ [y/N]: ")"
+    IFS= read -r answer || answer=""
+    case ${answer} in
+        y|Y|yes|YES|Yes|是) ;;
+        *) printf '%s\n' "$(gettext "已取消。")"; return 0 ;;
+    esac
+    out=$(rxa_rillml reinstall --probe lightweight 2>&1) || { printf '%s\n' "${out}"; printf '%s\n' "$(gettext "RillML 重新安装失败。")"; return 1; }
+    printf '%s\n' "${out}"
+}
+
+rxa_rillml_rollback() {
+    local answer out
+    printf '%s\n' "$(gettext "将回滚到上一个已验证的 RillML 版本（无可用时失败）。")"
+    printf '%s' "$(gettext "确认回滚吗？ [y/N]: ")"
+    IFS= read -r answer || answer=""
+    case ${answer} in
+        y|Y|yes|YES|Yes|是) ;;
+        *) printf '%s\n' "$(gettext "已取消。")"; return 0 ;;
+    esac
+    out=$(rxa_rillml rollback 2>&1) || { printf '%s\n' "${out}"; printf '%s\n' "$(gettext "RillML 回滚失败。")"; return 1; }
+    printf '%s\n' "${out}"
+}
+
+# ---- P0-8: root execution-policy orchestration -------------------------
+# The Xray manager is the ROOT operator entrypoint. Every authority-relevant
+# transition (mode change, routeStage change, auto confirm/revoke, safe-disable,
+# fuse acknowledge, policy reset) MUST go through the one-shot root execution
+# policy helper so executionEpoch is bumped (queued ApplyRequests become stale)
+# and the unprivileged Runtime projection is refreshed. The helper is root-only
+# and fail-closed on corruption; a missing/unavailable helper fails the
+# transition instead of allowing a half-state.
+
+rxa_root_policy() {
+    # Invoke the one-shot root execution-policy helper.
+    # RILL_XRAY_AGENT_ROOT_POLICY_HELPER overrides the path (tests / sandbox).
+    local helper=${RILL_XRAY_AGENT_ROOT_POLICY_HELPER:-/opt/rill-xray-agent/bin/rill-xray-agent-root-policy}
+    [[ -x "$helper" ]] || return 1
+    "$helper" "$@"
+}
+
+rxa_root_policy_ok() {
+    # Best-effort read of the CURRENT root execution policy mode. Returns the
+    # mode string on stdout, or 1 when the helper is unavailable / corrupt /
+    # the projection cannot be read. Read-only: never mutates state.
+    local helper=${RILL_XRAY_AGENT_ROOT_POLICY_HELPER:-/opt/rill-xray-agent/bin/rill-xray-agent-root-policy}
+    if [[ -x "$helper" ]]; then
+        local out
+        out=$("$helper" status 2>/dev/null) || return 1
+        python3 - "$out" <<'PY' || return 1
+import json,sys
+try:
+    print(json.loads(sys.argv[1])['policy']['mode'])
+except Exception:
+    raise SystemExit(1)
+PY
+        return 0
+    fi
+    # No helper: fall back to the configured preference (never an authority).
+    rxa_get mode 2>/dev/null
+}
+
+rxa_root_policy_route_stage() {
+    # Best-effort read of the CURRENT root execution policy routeStage
+    # (observe/assist/auto). Returns the stage string on stdout, or 1 when the
+    # helper is unavailable / corrupt / the projection cannot be read.
+    # Read-only: never mutates state.
+    local helper=${RILL_XRAY_AGENT_ROOT_POLICY_HELPER:-/opt/rill-xray-agent/bin/rill-xray-agent-root-policy}
+    if [[ -x "$helper" ]]; then
+        local out
+        out=$("$helper" status 2>/dev/null) || return 1
+        python3 - "$out" <<'PY' || return 1
+import json,sys
+try:
+    print(json.loads(sys.argv[1])['policy']['routeStage'])
+except Exception:
+    raise SystemExit(1)
+PY
+        return 0
+    fi
+    # No helper: fall back to the configured preference (never an authority).
+    rxa_get routeStage 2>/dev/null
+}
+
+rxa_root_policy_sync_mode() {
+    # Sync the ROOT execution policy mode as the FIRST step of a mode
+    # transaction. safe-disabled uses the dedicated safe-disable transition
+    # (revokes auto + bumps epoch -> queued requests stale). normal /
+    # observe-only use the mode transition (bumps epoch; NEVER restores auto
+    # confirmation). A missing helper fails closed so no half-state exists.
+    local target=${1:-}
+    local helper=${RILL_XRAY_AGENT_ROOT_POLICY_HELPER:-/opt/rill-xray-agent/bin/rill-xray-agent-root-policy}
+    [[ -x "$helper" ]] || return 1
+    if [[ "$target" == safe-disabled ]]; then
+        "$helper" safe-disable >/dev/null 2>&1 || return 1
+    else
+        "$helper" mode "$target" >/dev/null 2>&1 || return 1
+    fi
+    return 0
+}
+
+rxa_apply_route_stage() {
+    # P0-8: routeStage is a three-party transaction: root execution policy
+    # route-stage (bumps epoch -> queued requests stale), configured
+    # preference and Runtime preference. Any failure rolls the root policy
+    # back to the previous stage so no half-state exists.
+    local stage=${1:-} old
+    case "$stage" in observe|assist|auto) ;; *) return 64 ;; esac
+    rxa_config_init
+    old=$(rxa_get routeStage)
+    [[ -z "${old}" ]] && old=observe
+    # Re-asserting the same preference is only a no-op when the root policy
+    # agrees; otherwise repair the drift below.
+    local rp_stage
+    rp_stage=$(rxa_root_policy_route_stage) || rp_stage="$old"
+    if [[ "$rp_stage" == "$stage" ]]; then
+        rxa_set routeStage "$stage" || return 1
+        return 0
+    fi
+    # 1) root execution policy route-stage (authority; bumps epoch).
+    if ! rxa_root_policy route-stage "$stage" >/dev/null 2>&1; then
+        # No helper / corrupt policy: fail closed, never half-apply.
+        return 1
+    fi
+    # 2) configured preference; on failure roll the root policy back.
+    if ! rxa_set routeStage "$stage"; then
+        rxa_root_policy route-stage "$old" >/dev/null 2>&1 || true
+        return 1
+    fi
+    # 3) Runtime preference (shadow only, never authority).
+    rxa_runtime route-stage "$stage" >/dev/null 2>&1 || true
+    return 0
+}
+
+rxa_apply_auto_confirm() {
+    # P0-8: real auto execution authority comes from root-policy confirm-auto,
+    # NEVER from the Runtime-local autoConfirmedAtEpochSeconds. Requires the
+    # configured routeStage preference to be auto first.
+    local stage
+    stage=$(rxa_get routeStage 2>/dev/null) || stage=observe
+    if [[ "$stage" != auto ]]; then
+        return 64
+    fi
+    rxa_root_policy confirm-auto >/dev/null 2>&1
+}
+
+rxa_apply_auto_revoke() {
+    # P0-8: explicit auto revocation through the root policy (bumps epoch).
+    rxa_root_policy revoke-auto >/dev/null 2>&1
+}
+
+rxa_acknowledge_fuse() {
+    # P0-8: explicit fuse acknowledgment to re-arm auto through the root policy.
+    rxa_root_policy acknowledge-fuse >/dev/null 2>&1
 }
 
 # P1-2: integration capability floor. Compatibility is decided by a SCHEMA
@@ -261,12 +516,12 @@ rxa_mode_state_matches_target() {
     rxa_verify_runtime_mode "$mode" || return 1
     if [[ ${RILL_XRAY_AGENT_NO_SYSTEMD:-0} != 1 ]]; then
         if ((want_units)); then
-            for unit in rill-xray-agent-runtime.service rill-xray-agent-agent.service rill-xray-agent-xray-observe.path rill-xray-agent-xray-observe.timer; do
+            for unit in rill-xray-agent-runtime.service rill-xray-agent-agent.service rill-xray-agent-xray-observe.path rill-xray-agent-xray-observe.timer rill-xray-agent-auto-evaluate.path; do
                 rxa_systemctl is-active --quiet "$unit" || return 1
             done
             rxa_observe_valid || return 1
         else
-            for unit in rill-xray-agent-agent.service rill-xray-agent-xray-observe.path rill-xray-agent-xray-observe.timer; do
+            for unit in rill-xray-agent-agent.service rill-xray-agent-xray-observe.path rill-xray-agent-xray-observe.timer rill-xray-agent-auto-evaluate.path; do
                 rxa_systemctl is-active --quiet "$unit" && return 1
             done
         fi
@@ -293,10 +548,29 @@ rxa_apply_mode() {
         return 0
     fi
 
+    # P0-8 Phase 0: ROOT execution policy FIRST, before any Runtime/unit
+    # mutation. safe-disabled uses the dedicated safe-disable transition
+    # (revokes auto + bumps executionEpoch -> queued ApplyRequests become
+    # stale); normal / observe-only use the mode transition (bumps epoch;
+    # NEVER restores auto confirmation - the operator must re-confirm
+    # explicitly). The helper is root-only and fail-closed: a missing or
+    # corrupt helper aborts the transition so no half-state exists.
+    if ! rxa_root_policy_sync_mode "$mode"; then
+        return 1
+    fi
+
     # Phase 1: config + Runtime committed through the Runtime WAL.
-    rxa_runtime mode "$mode" >/dev/null || return 1
+    if ! rxa_runtime mode "$mode" >/dev/null; then
+        # P0-8: early rollback restores the root execution policy; no
+        # half-state where authority diverges from preference.
+        rxa_root_policy_sync_mode "$old" >/dev/null 2>&1 || true
+        return 1
+    fi
     if ! rxa_verify_runtime_mode "$mode"; then
+        # Early rollback must ALSO restore the root execution policy so no
+        # half-state exists (P0-8: authority and preference stay in lockstep).
         rxa_runtime mode "$old" >/dev/null 2>&1 || true
+        rxa_root_policy_sync_mode "$old" >/dev/null 2>&1 || true
         return 1
     fi
 
@@ -307,8 +581,9 @@ rxa_apply_mode() {
         rxa_systemctl enable --now rill-xray-agent-runtime.service >/dev/null 2>&1 || rc=1
         rxa_systemctl enable --now rill-xray-agent-agent.service >/dev/null 2>&1 || rc=1
         rxa_systemctl enable --now rill-xray-agent-xray-observe.path rill-xray-agent-xray-observe.timer >/dev/null 2>&1 || rc=1
+        rxa_systemctl enable --now rill-xray-agent-auto-evaluate.path >/dev/null 2>&1 || rc=1
         if [[ ${RILL_XRAY_AGENT_NO_SYSTEMD:-0} != 1 ]]; then
-            for unit in rill-xray-agent-runtime.service rill-xray-agent-agent.service rill-xray-agent-xray-observe.path rill-xray-agent-xray-observe.timer; do
+            for unit in rill-xray-agent-runtime.service rill-xray-agent-agent.service rill-xray-agent-xray-observe.path rill-xray-agent-xray-observe.timer rill-xray-agent-auto-evaluate.path; do
                 rxa_systemctl is-active --quiet "$unit" || rc=1
             done
         fi
@@ -316,9 +591,10 @@ rxa_apply_mode() {
         rxa_systemctl disable --now \
           rill-xray-agent-agent.service \
           rill-xray-agent-xray-observe.path \
-          rill-xray-agent-xray-observe.timer >/dev/null 2>&1 || rc=1
+          rill-xray-agent-xray-observe.timer \
+          rill-xray-agent-auto-evaluate.path >/dev/null 2>&1 || rc=1
         if [[ ${RILL_XRAY_AGENT_NO_SYSTEMD:-0} != 1 ]]; then
-            for unit in rill-xray-agent-agent.service rill-xray-agent-xray-observe.path; do
+            for unit in rill-xray-agent-agent.service rill-xray-agent-xray-observe.path rill-xray-agent-auto-evaluate.path; do
                 rxa_systemctl is-active --quiet "$unit" && rc=1
             done
         fi
@@ -330,6 +606,7 @@ rxa_apply_mode() {
     elif [[ ${RILL_XRAY_AGENT_NO_SYSTEMD:-0} != 1 ]]; then
         rxa_systemctl is-active --quiet rill-xray-agent-xray-observe.path && rc=1
         rxa_systemctl is-active --quiet rill-xray-agent-agent.service && rc=1
+        rxa_systemctl is-active --quiet rill-xray-agent-auto-evaluate.path && rc=1
     fi
 
     # Phase 4: commit the persisted config only after every party verified.
@@ -339,16 +616,21 @@ rxa_apply_mode() {
     fi
 
     if ((rc != 0)); then
-        # Roll back Runtime, systemd units and config to the previous mode.
+        # Roll back Runtime, systemd units, config AND the root execution
+        # policy to the previous mode (P0-8: authority and preference must
+        # stay in lockstep; a partial transition is never left behind).
         rxa_runtime mode "$old" >/dev/null 2>&1 || true
+        rxa_root_policy_sync_mode "$old" >/dev/null 2>&1 || true
         if [[ "$old" == safe-disabled ]]; then
             rxa_systemctl disable --now \
               rill-xray-agent-agent.service \
               rill-xray-agent-xray-observe.path \
-              rill-xray-agent-xray-observe.timer >/dev/null 2>&1 || true
+              rill-xray-agent-xray-observe.timer \
+              rill-xray-agent-auto-evaluate.path >/dev/null 2>&1 || true
         else
             rxa_systemctl enable --now rill-xray-agent-agent.service >/dev/null 2>&1 || true
             rxa_systemctl enable --now rill-xray-agent-xray-observe.path rill-xray-agent-xray-observe.timer >/dev/null 2>&1 || true
+            rxa_systemctl enable --now rill-xray-agent-auto-evaluate.path >/dev/null 2>&1 || true
         fi
         rxa_set mode "$old" >/dev/null 2>&1 || true
         return 1
@@ -384,6 +666,72 @@ rxa_mode_label() {
         safe-disabled) gettext "安全停用" ;;
         *) printf '%s' "${1:-}" ;;
     esac
+}
+
+rxa_auto_status() {
+    # P0-8: autoStatus distinguishes configured / rootAuthoritative / shadow /
+    # effective. The ONLY authority that can enable auto is the ROOT execution
+    # policy (autoConfirmed=true, mode=normal, routeStage=auto) AND the release
+    # manifest must have boundedAuto.released=true. Runtime-local
+    # autoConfirmedAtEpochSeconds is a shadow record only, never an authority.
+    # Any party that is unavailable/corrupt fails closed towards not-effective
+    # (never fabricates an enablement).
+    rxa_config_init
+    local cfg_stage cfg_ba rp_json rp_mode rp_stage rp_auto rp_epoch
+    local shadow_json shadow_confirmed shadow_stage ba_released
+    cfg_stage=$(rxa_get routeStage 2>/dev/null); [[ -n "${cfg_stage}" ]] || cfg_stage=observe
+    cfg_ba=$(rxa_get boundedAutoAllowed 2>/dev/null)
+    [[ "${cfg_ba}" == true ]] && cfg_ba=true || cfg_ba=false
+    rp_mode=unknown; rp_stage=unknown; rp_auto=false; rp_epoch=0
+    if rp_json=$(rxa_root_policy status 2>/dev/null); then
+        read -r rp_mode rp_stage rp_auto rp_epoch <<<"$(printf '%s' "${rp_json}" | python3 -c 'import json,sys
+try:
+    p=json.load(sys.stdin)["policy"]
+    print(p.get("mode","?"),p.get("routeStage","?"),"true" if p.get("autoConfirmed") else "false",p.get("executionEpoch","?"))
+except Exception:
+    print("? ? ? ?")')"
+    fi
+    shadow_confirmed=false; shadow_stage=unknown
+    if shadow_json=$(rxa_runtime auto-status 2>/dev/null); then
+        read -r shadow_confirmed shadow_stage <<<"$(printf '%s' "${shadow_json}" | python3 -c 'import json,sys
+try:
+    d=json.load(sys.stdin); d=d.get("result") or d
+    print("true" if d.get("autoConfirmed") else "false", d.get("configuredStage","?"))
+except Exception:
+    print("? ?")')"
+    fi
+    ba_released=false
+    local rel=${RILL_XRAY_AGENT_RELEASE_MANIFEST:-/opt/rill-xray-agent/share/release-capabilities.json}
+    if [[ -r "${rel}" ]]; then
+        ba_released=$(python3 - "${rel}" <<'PY' 2>/dev/null || printf 'false'
+import json,sys
+try:
+    print("true" if json.load(open(sys.argv[1]))["features"]["boundedAuto"]["released"] else "false")
+except Exception:
+    print("false")
+PY
+)
+        [[ "${ba_released}" == true ]] && ba_released=true || ba_released=false
+    fi
+    local effective=false
+    if [[ "${rp_mode}" == normal && "${rp_stage}" == auto && "${rp_auto}" == true && "${ba_released}" == true ]]; then
+        effective=true
+    fi
+    python3 - "${cfg_stage}" "${cfg_ba}" "${rp_mode}" "${rp_stage}" "${rp_auto}" "${rp_epoch}" "${shadow_confirmed}" "${shadow_stage}" "${effective}" <<'PY'
+import json,sys
+(stage,ba,rp_mode,rp_stage,rp_auto,rp_epoch,sh_conf,sh_stage,eff)=sys.argv[1:]
+print(json.dumps({
+    'schemaVersion':1,
+    'autoStatus':{
+        'configured':{'routeStage':stage,'boundedAutoAllowed':ba=='true'},
+        'rootAuthoritative':{'mode':rp_mode,'routeStage':rp_stage,
+                             'autoConfirmed':rp_auto=='true',
+                             'executionEpoch':int(rp_epoch)},
+        'shadow':{'autoConfirmed':sh_conf=='true','configuredStage':sh_stage},
+        'effective':eff=='true',
+    },
+},sort_keys=True))
+PY
 }
 
 rxa_ai_judgment_label() {
@@ -426,6 +774,7 @@ rxa_refresh_summary() {
         RILL_XRAY_AGENT_HEADER_MODE="$(gettext "工作模式: 不可用")"
         RILL_XRAY_AGENT_HEADER_RUNTIME="$(gettext "服务: 未运行")"
         RILL_XRAY_AGENT_HEADER_ROUTE="$(gettext "路由辅助: 关闭")"
+        RILL_XRAY_AGENT_HEADER_RILLML="$(gettext "RillML: 不可用")"
         return 0
     fi
     mode=$(python3 -c 'import json,sys;print(json.load(sys.stdin)["mode"])' <<<"$status")
@@ -438,6 +787,19 @@ rxa_refresh_summary() {
         RILL_XRAY_AGENT_HEADER_RUNTIME="$(gettext "服务: 未运行")"
     fi
     RILL_XRAY_AGENT_HEADER_ROUTE="$(gettext "路由辅助: 关闭")"
+    # RillML native-runtime header: read-only IPC surface (never a lifecycle op).
+    local rillml_status_line rillml_state
+    if rillml_status_line=$(rxa_rillml_native_status 2>/dev/null); then
+        rillml_state=$(printf '%s' "${rillml_status_line}" | python3 -c 'import json,sys
+try:
+    d=json.load(sys.stdin); d=d.get("result") or d
+    print(d.get("nativeRuntime",{}).get("status","?"))
+except Exception:
+    print("?")')
+        RILL_XRAY_AGENT_HEADER_RILLML="$(gettext "RillML"): $(rxa_rillml_state_label "$rillml_state")"
+    else
+        RILL_XRAY_AGENT_HEADER_RILLML="$(gettext "RillML: 不可用")"
+    fi
 }
 
 rxa_socket_connectable() {
@@ -522,6 +884,7 @@ rxa_status_display() {
     printf '%s\n' "${RILL_XRAY_AGENT_HEADER_MODE}"
     printf '%s\n' "${runtime_field}"
     printf '%s\n' "${RILL_XRAY_AGENT_HEADER_ROUTE}"
+    printf '%s\n' "${RILL_XRAY_AGENT_HEADER_RILLML}"
 }
 
 rxa_mode_change_confirm() {
@@ -716,6 +1079,33 @@ rxa_verify_diag_menu() {
     done
 }
 
+rxa_rillml_menu() {
+    local choice
+    while true; do
+        menu_submenu_begin "$(gettext "Rill Xray AI 运维助手 / RillML 管理")"
+        menu_row "$(gettext "RillML 预编译运行时：安装 / 升级 / 重装 / 回滚（root 操作，失败不阻塞主引擎）。")"
+        menu_blank
+        menu_item 1 "$(gettext "查看 RillML 状态")"
+        menu_item 2 "$(gettext "安装 RillML")"
+        menu_item 3 "$(gettext "升级 RillML")"
+        menu_item 4 "$(gettext "重新安装 RillML")"
+        menu_item 5 "$(gettext "回滚 RillML")"
+        menu_blank
+        menu_item 0 "$(gettext "返回")"
+        menu_footer
+        menu_read choice 5
+        echo
+        case $choice in
+            0) return ;;
+            1) rxa_rillml_status_display; menu_pause ;;
+            2) rxa_rillml_install; menu_pause ;;
+            3) rxa_rillml_upgrade; menu_pause ;;
+            4) rxa_rillml_reinstall; menu_pause ;;
+            5) rxa_rillml_rollback; menu_pause ;;
+        esac
+    done
+}
+
 rxa_menu() {
     local choice
     scripts_dir=${scripts_dir:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)}
@@ -734,9 +1124,11 @@ rxa_menu() {
         menu_item 4 "$(gettext "安装或修复 AI 判断引擎")"
         menu_item 5 "$(gettext "卸载 Rill AI 引擎")"
         menu_blank
+        menu_item 6 "$(gettext "RillML 管理")"
+        menu_blank
         menu_item 0 "$(gettext "返回")"
         menu_footer
-        menu_read choice 5
+        menu_read choice 6
         echo
         case $choice in
             0) return ;;
@@ -745,6 +1137,7 @@ rxa_menu() {
             3) rxa_verify_diag_menu ;;
             4) rxa_install_with_notice; menu_pause ;;
             5) bash "${scripts_dir}/rill_xray_agent_uninstall.sh"; return ;;
+            6) rxa_rillml_menu ;;
         esac
     done
 }
@@ -758,7 +1151,24 @@ rxa_dispatch() {
         verify) rxa_verify ;;
         diagnose) rxa_diagnose ;;
         timeline) rxa_runtime timeline ;;
+        # P0-8: authority-relevant transitions MUST go through the root policy.
+        # routeStage is a three-party transaction (root policy + configured
+        # preference + Runtime shadow); auto confirm/revoke and fuse ack go
+        # through the root-policy helper which bumps executionEpoch.
+        routeStage) rxa_apply_route_stage "${2:-}" ;;
+        autoStatus) rxa_auto_status ;;
+        autoConfirm) rxa_apply_auto_confirm ;;
+        autoRevoke) rxa_apply_auto_revoke ;;
+        fuseAck) rxa_acknowledge_fuse ;;
         uninstall) bash "${scripts_dir}/rill_xray_agent_uninstall.sh" ;;
+        # RillML native runtime: read-only status over IPC; lifecycle ops are
+        # root-only (never proxied through the Runtime, §P0-16).
+        rillmlStatus) rxa_rillml_native_status ;;
+        rillml-status) rxa_rillml_status_display ;;
+        rillml-install) rxa_rillml_install ;;
+        rillml-upgrade) rxa_rillml_upgrade ;;
+        rillml-reinstall) rxa_rillml_reinstall ;;
+        rillml-rollback) rxa_rillml_rollback ;;
         *) return 64 ;;
     esac
 }

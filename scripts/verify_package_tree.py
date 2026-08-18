@@ -40,6 +40,12 @@ for path in root.rglob("*"):
     if not in_integration and forbidden in rel.as_posix().lower():
         errors.append(f"forbidden identity in path: {rel}")
     if path.is_file() and path.name != "PACKAGE_SHA256SUMS" and not in_integration:
+        # P0-5: route_executor.py is the SINGLE core module that hardcodes the
+        # host contract (its DEFAULT_MANAGED_CONFIG_PATH) — the single live
+        # truth, exempt exactly like the integration tree (mirrors
+        # tests/test_package_identity.py).
+        if rel == Path("python") / "rill_xray_agent" / "route_executor.py":
+            continue
         # Qualification logs are sealed evidence that legitimately contain
         # Xray runtime path output (e.g. /etc/<host>/conf/xray/config.json).
         # Mirror the package-identity exemption in tests/test_package_identity.py.

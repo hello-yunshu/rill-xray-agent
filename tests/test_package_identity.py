@@ -34,6 +34,14 @@ class Tests(unittest.TestCase):
                 continue
             if path.is_file() and path.suffix == ".log" and "qualification" in path.parts:
                 continue
+            # P0-5: route_executor.py is the SINGLE core module that hardcodes
+            # the host contract (its DEFAULT_MANAGED_CONFIG_PATH) — the single
+            # live truth, checked verbatim by test_observer_real_paths and
+            # forbidden in every other core module. Exempt it here exactly like
+            # the integration tree so the package-wide identity scan matches
+            # that same rule.
+            if path == ROOT / "python/rill_xray_agent/route_executor.py":
+                continue
             self.assertNotIn(token, path.as_posix().lower())
             if path.is_file() and path.name != "PACKAGE_SHA256SUMS":
                 self.assertNotIn(token, path.read_text(errors="ignore").lower(), str(path))
