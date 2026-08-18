@@ -87,6 +87,7 @@ class CliDispatchTest(unittest.TestCase):
                     (['route-history'], 0),
                     (['auto-status'], 0),
                     (['auto-produce'], 0),
+                    (['rillml-status'], 0),
                     (['feedback', 'deadbeef' * 8, '--outcome', 'resolved',
                       '--helpful', 'true', '--diagnosis-correct', 'true'], 0),
                 ]
@@ -97,6 +98,23 @@ class CliDispatchTest(unittest.TestCase):
                         self.assertEqual(rc, want, f'dispatch failed for {argv}')
             finally:
                 fake.close()
+
+
+    def test_rillml_lifecycle_cli_requires_root(self) -> None:
+        # Root-only RillML lifecycle (§P0-16): a non-root caller must fail
+        # closed with rootRequired and NEVER touch the tree over IPC.
+        import contextlib
+        import io
+        from unittest import mock
+        buf = io.StringIO()
+        with mock.patch('os.geteuid', return_value=1000), \
+                mock.patch('os.name', 'posix'), \
+                contextlib.redirect_stdout(buf):
+            rc = cli.main(['--json', '--rillml-root', '/tmp/rillml-x', 'rillml', 'status'])
+        self.assertEqual(rc, 1)
+        out = json.loads(buf.getvalue())
+        self.assertFalse(out['ok'])
+        self.assertEqual(out['error']['code'], 'rootRequired')
 
 
 if __name__ == '__main__':
