@@ -1,13 +1,15 @@
-# Rill Xray Agent 0.1.0
+# RillML Xray Agent 0.1.0
 
 > 本地优先、fail-closed（默认关闭）的 Xray 管理脚本观测与决策支持代理。
 > 包含可移植运行时（Runtime）、受限代理（Agent）、审计链、状态与事务恢复、备份安全、systemd 单元、Xray 宿主集成、测试与发布门禁。
+>
+> 简称：**Rill Xray Agent**。
 
 [English](./README_EN.md) · [文档目录](./docs/)
 
 ## 它是什么
 
-Rill Xray Agent 是一个面向 Xray 管理脚本的本地观测与决策支持代理。它不接管 Xray 的配置所有权，只提供观测、审计与受限的决策支持能力，帮助你在 Xray 主机上获得可追踪、可回滚、可审计的操作记录。
+RillML Xray Agent（简称 Rill Xray Agent）是一个面向 Xray 管理脚本的本地观测与决策支持代理。它不接管 Xray 的配置所有权，只提供观测、审计与受限的决策支持能力，帮助你在 Xray 主机上获得可追踪、可回滚、可审计的操作记录。
 
 ## 安全默认
 
