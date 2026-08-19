@@ -1,13 +1,15 @@
-# Rill Xray Agent 0.1.0
+# RillML Xray Agent 0.1.0
 
 > A local-first, fail-closed operational observation and decision-support agent for Xray management scripts.
 > Ships the portable Runtime, restricted Agent, audit chain, state and transaction recovery, backup safety, systemd units, Xray host integration files, tests and release gates.
+>
+> Short name: **Rill Xray Agent**.
 
 [中文](./README.md) · [Docs](./docs/)
 
 ## What it is
 
-Rill Xray Agent is a local observation and decision-support agent for Xray management scripts. It does not take ownership of Xray configuration; it provides observation, audit, and restricted decision-support so you get traceable, rollback-capable, auditable operation records on an Xray host.
+RillML Xray Agent (short name: Rill Xray Agent) is a local observation and decision-support agent for Xray management scripts. It does not take ownership of Xray configuration; it provides observation, audit, and restricted decision-support so you get traceable, rollback-capable, auditable operation records on an Xray host.
 
 ## Safety defaults
 
