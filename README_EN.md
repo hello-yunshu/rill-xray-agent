@@ -57,7 +57,7 @@ rill-xray-agent mode observe-only
 
 ## Status
 
-**Rill Xray Agent 0.1.0** (stable).
+**RillML Xray Agent 0.1.0** (stable).
 
 - Portable Python Runtime is the supported runtime; Native Rust remains experimental / unsupported (`nativeRuntimeSupported=false`).
 - Default `observe-only`; Route Assist OFF; bounded auto OFF; local-only.
