@@ -24,6 +24,7 @@ from rill_xray_agent.rillml_artifact import (
     RillMLRuntimeManager,
     RillMLUnsupported,
     RillMLValidationError,
+    _semver_key,
     _validate_https_url,
     detect_platform,
     download_artifact,
@@ -202,7 +203,7 @@ class ReleaseIndexParseTest(unittest.TestCase):
         }
         pm_adapter = {
             'kind': 'pm-adapter', 'id': 'rill-pm-adapter', 'version': '1.2.0',
-            'runtimeApiVersion': 0, 'pmAdapterProtocolVersion': 1,
+            'pmAdapterProtocolVersion': 1,
             'targetOs': 'linux', 'targetArch': 'x86_64', 'targetLibc': 'musl',
             'url': ('https://github.com/hello-yunshu/rill-ml/releases/download/'
                     'v1.2.0/rill-pm-adapter-1.2.0-linux-x86_64-musl'),
@@ -241,7 +242,7 @@ class ReleaseIndexParseTest(unittest.TestCase):
 
     def test_pm_adapter_requires_protocol_version(self):
         bad = {'kind': 'pm-adapter', 'id': 'rill-pm-adapter', 'version': '1.2.0',
-               'runtimeApiVersion': 0, 'targetOs': 'linux', 'targetArch': 'x86_64',
+               'targetOs': 'linux', 'targetArch': 'x86_64',
                'targetLibc': 'musl',
                'url': ('https://github.com/hello-yunshu/rill-ml/releases/download/'
                        'v1.2.0/rill-pm-adapter-1.2.0-linux-x86_64-musl'),
@@ -250,6 +251,75 @@ class ReleaseIndexParseTest(unittest.TestCase):
         with self.assertRaises(RillMLValidationError):
             parse_release_index(text.decode(), trusted_key_id=TEST_KEY_ID,
                                 public_key_hex=TEST_PUB_HEX)
+
+    def test_pm_adapter_does_not_require_runtime_api_version(self):
+        adapter = {
+            'kind': 'pm-adapter', 'id': 'rill-pm-adapter', 'version': '1.5.1',
+            'pmAdapterProtocolVersion': 1, 'targetOs': 'linux',
+            'targetArch': 'x86_64', 'targetLibc': 'musl',
+            'url': 'https://example.com/rill-pm-adapter-1.5.1',
+            'size': 1, 'sha256': 'ab' * 32,
+        }
+        payload = parse_release_index(
+            make_index([adapter]).decode(), trusted_key_id=TEST_KEY_ID,
+            public_key_hex=TEST_PUB_HEX)
+        self.assertEqual(payload['artifacts'][0]['kind'], 'pm-adapter')
+
+    def test_linux_pm_adapter_requires_target_libc(self):
+        adapter = {
+            'kind': 'pm-adapter', 'id': 'rill-pm-adapter', 'version': '1.5.1',
+            'pmAdapterProtocolVersion': 1, 'targetOs': 'linux',
+            'targetArch': 'x86_64', 'url': 'https://example.com/adapter',
+            'size': 1, 'sha256': 'ab' * 32,
+        }
+        with self.assertRaises(RillMLValidationError):
+            parse_release_index(
+                make_index([adapter]).decode(), trusted_key_id=TEST_KEY_ID,
+                public_key_hex=TEST_PUB_HEX)
+
+    def test_runtime_model_and_handler_require_runtime_api(self):
+        for kind, base in (
+                ('runtime', runtime_artifact()),
+                ('model', {'kind': 'model', 'id': 'model', 'version': '1.5.1',
+                           'url': 'https://example.com/model', 'size': 1,
+                           'sha256': 'ab' * 32}),
+                ('handler', {'kind': 'handler', 'id': 'handler',
+                             'version': '1.5.1', 'handlerApiVersion': 1,
+                             'minRuntimeVersion': '1.0.0',
+                             'url': 'https://example.com/handler', 'size': 1,
+                             'sha256': 'ab' * 32}),
+        ):
+            broken = dict(base)
+            broken.pop('runtimeApiVersion', None)
+            with self.subTest(kind=kind), self.assertRaises(RillMLValidationError):
+                parse_release_index(
+                    make_index([broken]).decode(), trusted_key_id=TEST_KEY_ID,
+                    public_key_hex=TEST_PUB_HEX)
+
+    def test_handler_requires_min_runtime_version(self):
+        handler = {
+            'kind': 'handler', 'id': 'handler', 'version': '1.5.1',
+            'runtimeApiVersion': 2, 'handlerApiVersion': 1,
+            'url': 'https://example.com/handler', 'size': 1,
+            'sha256': 'ab' * 32,
+        }
+        with self.assertRaises(RillMLValidationError):
+            parse_release_index(
+                make_index([handler]).decode(), trusted_key_id=TEST_KEY_ID,
+                public_key_hex=TEST_PUB_HEX)
+
+    def test_unknown_kind_rejected(self):
+        unknown = {'kind': 'future', 'id': 'x', 'version': '1.5.1',
+                   'url': 'https://example.com/x', 'size': 1,
+                   'sha256': 'ab' * 32}
+        with self.assertRaises(RillMLValidationError):
+            parse_release_index(
+                make_index([unknown]).decode(), trusted_key_id=TEST_KEY_ID,
+                public_key_hex=TEST_PUB_HEX)
+
+    def test_prerelease_is_rejected_by_stable_comparison(self):
+        with self.assertRaises(RillMLValidationError):
+            _semver_key('1.5.1-rc.10')
 
     def test_runtime_artifact_requires_target_os(self):
         broken = runtime_artifact()
