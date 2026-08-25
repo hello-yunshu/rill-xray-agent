@@ -24,9 +24,11 @@ from rill_xray_agent.rillml_artifact import (
     RillMLRuntimeManager,
     RillMLUnsupported,
     RillMLValidationError,
+    _semver_key,
     _validate_https_url,
     detect_platform,
     download_artifact,
+    select_compatible_model_and_handler,
     parse_release_index,
     runtime_artifact_id,
     select_runtime_artifact,
@@ -202,7 +204,7 @@ class ReleaseIndexParseTest(unittest.TestCase):
         }
         pm_adapter = {
             'kind': 'pm-adapter', 'id': 'rill-pm-adapter', 'version': '1.2.0',
-            'runtimeApiVersion': 0, 'pmAdapterProtocolVersion': 1,
+            'pmAdapterProtocolVersion': 1,
             'targetOs': 'linux', 'targetArch': 'x86_64', 'targetLibc': 'musl',
             'url': ('https://github.com/hello-yunshu/rill-ml/releases/download/'
                     'v1.2.0/rill-pm-adapter-1.2.0-linux-x86_64-musl'),
@@ -241,7 +243,7 @@ class ReleaseIndexParseTest(unittest.TestCase):
 
     def test_pm_adapter_requires_protocol_version(self):
         bad = {'kind': 'pm-adapter', 'id': 'rill-pm-adapter', 'version': '1.2.0',
-               'runtimeApiVersion': 0, 'targetOs': 'linux', 'targetArch': 'x86_64',
+               'targetOs': 'linux', 'targetArch': 'x86_64',
                'targetLibc': 'musl',
                'url': ('https://github.com/hello-yunshu/rill-ml/releases/download/'
                        'v1.2.0/rill-pm-adapter-1.2.0-linux-x86_64-musl'),
@@ -250,6 +252,75 @@ class ReleaseIndexParseTest(unittest.TestCase):
         with self.assertRaises(RillMLValidationError):
             parse_release_index(text.decode(), trusted_key_id=TEST_KEY_ID,
                                 public_key_hex=TEST_PUB_HEX)
+
+    def test_pm_adapter_does_not_require_runtime_api_version(self):
+        adapter = {
+            'kind': 'pm-adapter', 'id': 'rill-pm-adapter', 'version': '1.5.1',
+            'pmAdapterProtocolVersion': 1, 'targetOs': 'linux',
+            'targetArch': 'x86_64', 'targetLibc': 'musl',
+            'url': 'https://example.com/rill-pm-adapter-1.5.1',
+            'size': 1, 'sha256': 'ab' * 32,
+        }
+        payload = parse_release_index(
+            make_index([adapter]).decode(), trusted_key_id=TEST_KEY_ID,
+            public_key_hex=TEST_PUB_HEX)
+        self.assertEqual(payload['artifacts'][0]['kind'], 'pm-adapter')
+
+    def test_linux_pm_adapter_requires_target_libc(self):
+        adapter = {
+            'kind': 'pm-adapter', 'id': 'rill-pm-adapter', 'version': '1.5.1',
+            'pmAdapterProtocolVersion': 1, 'targetOs': 'linux',
+            'targetArch': 'x86_64', 'url': 'https://example.com/adapter',
+            'size': 1, 'sha256': 'ab' * 32,
+        }
+        with self.assertRaises(RillMLValidationError):
+            parse_release_index(
+                make_index([adapter]).decode(), trusted_key_id=TEST_KEY_ID,
+                public_key_hex=TEST_PUB_HEX)
+
+    def test_runtime_model_and_handler_require_runtime_api(self):
+        for kind, base in (
+                ('runtime', runtime_artifact()),
+                ('model', {'kind': 'model', 'id': 'model', 'version': '1.5.1',
+                           'url': 'https://example.com/model', 'size': 1,
+                           'sha256': 'ab' * 32}),
+                ('handler', {'kind': 'handler', 'id': 'handler',
+                             'version': '1.5.1', 'handlerApiVersion': 1,
+                             'minRuntimeVersion': '1.0.0',
+                             'url': 'https://example.com/handler', 'size': 1,
+                             'sha256': 'ab' * 32}),
+        ):
+            broken = dict(base)
+            broken.pop('runtimeApiVersion', None)
+            with self.subTest(kind=kind), self.assertRaises(RillMLValidationError):
+                parse_release_index(
+                    make_index([broken]).decode(), trusted_key_id=TEST_KEY_ID,
+                    public_key_hex=TEST_PUB_HEX)
+
+    def test_handler_requires_min_runtime_version(self):
+        handler = {
+            'kind': 'handler', 'id': 'handler', 'version': '1.5.1',
+            'runtimeApiVersion': 2, 'handlerApiVersion': 1,
+            'url': 'https://example.com/handler', 'size': 1,
+            'sha256': 'ab' * 32,
+        }
+        with self.assertRaises(RillMLValidationError):
+            parse_release_index(
+                make_index([handler]).decode(), trusted_key_id=TEST_KEY_ID,
+                public_key_hex=TEST_PUB_HEX)
+
+    def test_unknown_kind_rejected(self):
+        unknown = {'kind': 'future', 'id': 'x', 'version': '1.5.1',
+                   'url': 'https://example.com/x', 'size': 1,
+                   'sha256': 'ab' * 32}
+        with self.assertRaises(RillMLValidationError):
+            parse_release_index(
+                make_index([unknown]).decode(), trusted_key_id=TEST_KEY_ID,
+                public_key_hex=TEST_PUB_HEX)
+
+    def test_prerelease_is_rejected_by_stable_comparison(self):
+        with self.assertRaises(RillMLValidationError):
+            _semver_key('1.5.1-rc.10')
 
     def test_runtime_artifact_requires_target_os(self):
         broken = runtime_artifact()
@@ -362,6 +433,51 @@ class ArtifactSelectionTest(unittest.TestCase):
             select_runtime_artifact(self._index(), target_os='linux',
                                     target_arch='x86_64', libc='gnu',
                                     api_version=1)
+
+    def test_model_and_handler_compatibility(self):
+        runtime = runtime_artifact(version='1.5.1')
+        model = {
+            'kind': 'model', 'id': 'rillml.example.default', 'version': '9.0.0',
+            'runtimeApiVersion': 2, 'url': 'https://example.com/model',
+            'size': 1, 'sha256': 'ab' * 32,
+        }
+        handler = {
+            'kind': 'handler', 'id': 'rillml.echo.handler', 'version': '8.0.0',
+            'runtimeApiVersion': 2, 'handlerApiVersion': 1,
+            'minRuntimeVersion': '1.5.0', 'url': 'https://example.com/handler',
+            'size': 1, 'sha256': 'cd' * 32,
+        }
+        payload = {'artifacts': [runtime, model, handler]}
+        selected_model, selected_handler = select_compatible_model_and_handler(
+            payload, runtime)
+        self.assertEqual(selected_model['version'], '9.0.0')
+        self.assertEqual(selected_handler['version'], '8.0.0')
+
+    def test_model_runtime_api_mismatch_rejected(self):
+        runtime = runtime_artifact()
+        model = {'kind': 'model', 'id': 'rillml.example.default', 'version': '1.5.1',
+                 'runtimeApiVersion': 1, 'url': 'https://example.com/model',
+                 'size': 1, 'sha256': 'ab' * 32}
+        with self.assertRaises(RillMLValidationError):
+            select_compatible_model_and_handler(
+                {'artifacts': [runtime, model]}, runtime)
+
+    def test_handler_compatibility_failures_rejected(self):
+        runtime = runtime_artifact(version='1.5.1')
+        model = {'kind': 'model', 'id': 'rillml.example.default', 'version': '9.0.0',
+                 'runtimeApiVersion': 2, 'url': 'https://example.com/model',
+                 'size': 1, 'sha256': 'ab' * 32}
+        base = {'kind': 'handler', 'id': 'rillml.echo.handler', 'version': '8.0.0',
+                'runtimeApiVersion': 2, 'handlerApiVersion': 1,
+                'minRuntimeVersion': '1.5.0', 'url': 'https://example.com/handler',
+                'size': 1, 'sha256': 'cd' * 32}
+        for changes in ({'runtimeApiVersion': 1}, {'handlerApiVersion': 2},
+                        {'minRuntimeVersion': '1.5.2'}):
+            with self.subTest(changes=changes), self.assertRaises(RillMLValidationError):
+                handler = dict(base)
+                handler.update(changes)
+                select_compatible_model_and_handler(
+                    {'artifacts': [runtime, model, handler]}, runtime)
 
 
 class DownloadVerifyTest(unittest.TestCase):
@@ -486,6 +602,58 @@ class RuntimeManagerLifecycleTest(unittest.TestCase):
             mgr.rollback()
             s4 = mgr.status()
             self.assertEqual(s4['current']['version'], '1.1.0')
+
+    def test_handshake_install_freezes_one_verified_index_snapshot(self):
+        runtime = runtime_artifact(version='1.5.1')
+        model = {
+            'kind': 'model', 'id': 'rillml.example.default', 'version': '9.0.0',
+            'runtimeApiVersion': 2, 'url': 'https://example.com/model',
+            'size': 3, 'sha256': '00' * 32,
+        }
+        handler = {
+            'kind': 'handler', 'id': 'rillml.echo.handler', 'version': '8.0.0',
+            'runtimeApiVersion': 2, 'handlerApiVersion': 1,
+            'minRuntimeVersion': '1.5.0', 'url': 'https://example.com/handler',
+            'size': 3, 'sha256': '00' * 32,
+        }
+        runtime_data = b'run'
+        model_data = b'mod'
+        handler_data = b'hdl'
+        runtime['size'] = len(runtime_data)
+        runtime['sha256'] = hashlib.sha256(runtime_data).hexdigest()
+        model['sha256'] = hashlib.sha256(model_data).hexdigest()
+        handler['sha256'] = hashlib.sha256(handler_data).hexdigest()
+        index_a = make_index([runtime, model, handler])
+        index_b = make_index([dict(runtime, version='1.5.2')])
+        calls = {'index': 0}
+        probe = {'probe': 'handshake', 'executes': True}
+
+        def fetch(url, *, timeout, attempts, max_bytes):
+            _validate_https_url(url)
+            if url.endswith('stable-index.json'):
+                calls['index'] += 1
+                return index_a if calls['index'] == 1 else index_b
+            return {
+                runtime['url']: runtime_data,
+                model['url']: model_data,
+                handler['url']: handler_data,
+            }[url]
+
+        with mock.patch('rill_xray_agent.rillml_artifact._http_get', fetch), \
+             mock.patch('rill_xray_agent.rillml_artifact.detect_platform',
+                        return_value={'os': 'linux', 'arch': 'x86_64', 'libc': 'gnu'}), \
+             mock.patch('rill_xray_agent.rillml_artifact.probe_runtime',
+                        return_value=probe) as probe_mock, \
+             tempfile.TemporaryDirectory() as td:
+            mgr = RillMLRuntimeManager(td, public_key_hex=TEST_PUB_HEX,
+                                        trusted_key_id=TEST_KEY_ID,
+                                        expected_release_version='1.5.1')
+            mgr.install(probe='handshake')
+            self.assertEqual(calls['index'], 1)
+            probe_mock.assert_called_once()
+            self.assertEqual(probe_mock.call_args.kwargs['expected_version'], '1.5.1')
+            self.assertEqual(probe_mock.call_args.kwargs['expected_model_version'], '9.0.0')
+            self.assertEqual(probe_mock.call_args.kwargs['expected_handler_version'], '8.0.0')
 
     def test_install_checksum_mismatch_never_activates(self):
         art = runtime_artifact()

@@ -35,6 +35,7 @@ sys.path.insert(0, str(ROOT / "python"))
 from rill_xray_agent.rillml_artifact import (  # noqa: E402
     detect_platform,
     fetch_release_index,
+    load_expected_release_version,
     parse_release_index,
     select_runtime_artifact,
     verify_artifact_file,
@@ -50,9 +51,12 @@ def main() -> int:
     args = parser.parse_args()
 
     platform_ = detect_platform()
+    expected_release = load_expected_release_version()
     summary = {"platform": platform_, "channel": "stable", "schemaVersion": None,
                "publisherKeyId": None, "runtimeApiVersion": None,
-               "artifact": None, "download": None, "probe": None}
+               "expectedReleaseVersion": expected_release,
+               "selectedReleaseVersion": None, "artifact": None,
+               "download": None, "probe": None}
 
     if args.expect_libc:
         if platform_["os"] != "linux" or platform_["libc"] != args.expect_libc:
@@ -73,6 +77,11 @@ def main() -> int:
     artifact = select_runtime_artifact(
         payload, target_os=platform_["os"], target_arch=platform_["arch"],
         libc=platform_["libc"], api_version=2, channel="stable")
+    if artifact["version"] != expected_release:
+        print(f"FAIL: selected stable release {artifact['version']!r} != "
+              f"audited expected release {expected_release!r}", file=sys.stderr)
+        return 2
+    summary["selectedReleaseVersion"] = artifact["version"]
     summary["artifact"] = {
         "id": artifact["id"], "version": artifact["version"],
         "targetOs": artifact.get("targetOs"), "targetArch": artifact.get("targetArch"),
