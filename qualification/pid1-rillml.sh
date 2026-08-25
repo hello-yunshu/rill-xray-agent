@@ -126,10 +126,11 @@ assert r.get("supported") and r.get("available"), r
 assert r.get("current") and r.get("current",{}).get("version"), r
 print(r["current"]["version"])'
 }
+EXPECTED_RILL_VERSION=${RILLML_EXPECTED_VERSION:-1.5.1}
 rillml_version_ok() {
-    rillml_status_json | python3 -c 'import json,sys
+    rillml_status_json | EXPECTED_RILL_VERSION="$EXPECTED_RILL_VERSION" python3 -c 'import json,os,sys
 d=json.load(sys.stdin); r=d.get("result") or d
-assert r["current"]["version"].startswith("1.2"), r'
+assert r["current"]["version"] == os.environ["EXPECTED_RILL_VERSION"], r'
 }
 rillml_ipc_active() {
     rxa_runtime rillml-status 2>/dev/null | python3 -c 'import json,sys
@@ -173,7 +174,7 @@ echo "=== RillML prebuilt native runtime (Batch D) ==="
 check "RillML root current tree + state present" bash -c 'test -d "$1/current" && test -f "$1/state.json"' _ "$RILLML_ROOT"
 check "RillML native binary executable" test -x "$RILLML_ROOT/current/rill-runtime"
 check "rillml status ok + supported + available + version (root CLI)" rillml_available
-check "rillml status version matches 1.2.0" rillml_version_ok
+check "rillml status version matches ${EXPECTED_RILL_VERSION}" rillml_version_ok
 check "rillml IPC surface active + verified (read-only)" rillml_ipc_active
 
 echo "=== fresh observe-only ==="

@@ -12,10 +12,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_CONFIG = ROOT / 'config' / 'default.json'
+SOURCE_PROVENANCE = ROOT / 'PROVENANCE' / 'upstream.json'
 SOURCE_PY = ROOT / 'python' / 'rill_xray_agent'
 REPO_FILES = ROOT / 'integrations' / 'xray_bash_onekey' / 'repository_files'
 PAYLOAD_CONFIG_DIR = REPO_FILES / 'rill_payload' / 'config'
 PAYLOAD_CONFIG = PAYLOAD_CONFIG_DIR / 'default.json'
+PAYLOAD_PROVENANCE_DIR = REPO_FILES / 'rill_payload' / 'PROVENANCE'
+PAYLOAD_PROVENANCE = PAYLOAD_PROVENANCE_DIR / 'upstream.json'
 PAYLOAD_PY = REPO_FILES / 'rill_payload' / 'python' / 'rill_xray_agent'
 ASSETS = ROOT / 'integrations' / 'xray_bash_onekey' / 'assets'
 BOOTSTRAP = REPO_FILES / 'scripts' / 'rill_xray_agent_bootstrap.sh'
@@ -43,6 +46,18 @@ def sync_config() -> list[str]:
     if stale:
         raise SystemExit(f'stale payload config entries (failing closed): {", ".join(stale)}')
     return changed
+
+
+def sync_provenance() -> list[str]:
+    """Ship the audited release identity with the installed payload."""
+    if not SOURCE_PROVENANCE.is_file():
+        raise SystemExit(f'missing source provenance: {SOURCE_PROVENANCE}')
+    if (not PAYLOAD_PROVENANCE.exists()
+            or PAYLOAD_PROVENANCE.read_bytes() != SOURCE_PROVENANCE.read_bytes()):
+        PAYLOAD_PROVENANCE_DIR.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(SOURCE_PROVENANCE, PAYLOAD_PROVENANCE)
+        return ['provenance: upstream.json']
+    return []
 
 
 def sync_payload() -> list[str]:
@@ -108,6 +123,7 @@ def pin_bundle() -> str:
 
 def main() -> None:
     changed = sync_config()
+    changed += sync_provenance()
     changed += sync_payload()
     digest = pin_bundle()
     print('synced payload:')
