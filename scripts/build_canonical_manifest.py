@@ -40,6 +40,7 @@ MIRROR_PAIRS = [
 # Top-level files pinned as-is (schema/version metadata, no payload mirror).
 PINNED_SOURCES = [
     ROOT / "schemas",
+    ROOT / "PROVENANCE",
     ROOT / "VERSION",
 ]
 
