@@ -28,6 +28,7 @@ from rill_xray_agent.rillml_artifact import (
     _validate_https_url,
     detect_platform,
     download_artifact,
+    select_compatible_model_and_handler,
     parse_release_index,
     runtime_artifact_id,
     select_runtime_artifact,
@@ -433,6 +434,51 @@ class ArtifactSelectionTest(unittest.TestCase):
                                     target_arch='x86_64', libc='gnu',
                                     api_version=1)
 
+    def test_model_and_handler_compatibility(self):
+        runtime = runtime_artifact(version='1.5.1')
+        model = {
+            'kind': 'model', 'id': 'rillml.example.default', 'version': '9.0.0',
+            'runtimeApiVersion': 2, 'url': 'https://example.com/model',
+            'size': 1, 'sha256': 'ab' * 32,
+        }
+        handler = {
+            'kind': 'handler', 'id': 'rillml.echo.handler', 'version': '8.0.0',
+            'runtimeApiVersion': 2, 'handlerApiVersion': 1,
+            'minRuntimeVersion': '1.5.0', 'url': 'https://example.com/handler',
+            'size': 1, 'sha256': 'cd' * 32,
+        }
+        payload = {'artifacts': [runtime, model, handler]}
+        selected_model, selected_handler = select_compatible_model_and_handler(
+            payload, runtime)
+        self.assertEqual(selected_model['version'], '9.0.0')
+        self.assertEqual(selected_handler['version'], '8.0.0')
+
+    def test_model_runtime_api_mismatch_rejected(self):
+        runtime = runtime_artifact()
+        model = {'kind': 'model', 'id': 'rillml.example.default', 'version': '1.5.1',
+                 'runtimeApiVersion': 1, 'url': 'https://example.com/model',
+                 'size': 1, 'sha256': 'ab' * 32}
+        with self.assertRaises(RillMLValidationError):
+            select_compatible_model_and_handler(
+                {'artifacts': [runtime, model]}, runtime)
+
+    def test_handler_compatibility_failures_rejected(self):
+        runtime = runtime_artifact(version='1.5.1')
+        model = {'kind': 'model', 'id': 'rillml.example.default', 'version': '9.0.0',
+                 'runtimeApiVersion': 2, 'url': 'https://example.com/model',
+                 'size': 1, 'sha256': 'ab' * 32}
+        base = {'kind': 'handler', 'id': 'rillml.echo.handler', 'version': '8.0.0',
+                'runtimeApiVersion': 2, 'handlerApiVersion': 1,
+                'minRuntimeVersion': '1.5.0', 'url': 'https://example.com/handler',
+                'size': 1, 'sha256': 'cd' * 32}
+        for changes in ({'runtimeApiVersion': 1}, {'handlerApiVersion': 2},
+                        {'minRuntimeVersion': '1.5.2'}):
+            with self.subTest(changes=changes), self.assertRaises(RillMLValidationError):
+                handler = dict(base)
+                handler.update(changes)
+                select_compatible_model_and_handler(
+                    {'artifacts': [runtime, model, handler]}, runtime)
+
 
 class DownloadVerifyTest(unittest.TestCase):
     def test_verify_artifact_size_mismatch(self):
@@ -556,6 +602,58 @@ class RuntimeManagerLifecycleTest(unittest.TestCase):
             mgr.rollback()
             s4 = mgr.status()
             self.assertEqual(s4['current']['version'], '1.1.0')
+
+    def test_handshake_install_freezes_one_verified_index_snapshot(self):
+        runtime = runtime_artifact(version='1.5.1')
+        model = {
+            'kind': 'model', 'id': 'rillml.example.default', 'version': '9.0.0',
+            'runtimeApiVersion': 2, 'url': 'https://example.com/model',
+            'size': 3, 'sha256': '00' * 32,
+        }
+        handler = {
+            'kind': 'handler', 'id': 'rillml.echo.handler', 'version': '8.0.0',
+            'runtimeApiVersion': 2, 'handlerApiVersion': 1,
+            'minRuntimeVersion': '1.5.0', 'url': 'https://example.com/handler',
+            'size': 3, 'sha256': '00' * 32,
+        }
+        runtime_data = b'run'
+        model_data = b'mod'
+        handler_data = b'hdl'
+        runtime['size'] = len(runtime_data)
+        runtime['sha256'] = hashlib.sha256(runtime_data).hexdigest()
+        model['sha256'] = hashlib.sha256(model_data).hexdigest()
+        handler['sha256'] = hashlib.sha256(handler_data).hexdigest()
+        index_a = make_index([runtime, model, handler])
+        index_b = make_index([dict(runtime, version='1.5.2')])
+        calls = {'index': 0}
+        probe = {'probe': 'handshake', 'executes': True}
+
+        def fetch(url, *, timeout, attempts, max_bytes):
+            _validate_https_url(url)
+            if url.endswith('stable-index.json'):
+                calls['index'] += 1
+                return index_a if calls['index'] == 1 else index_b
+            return {
+                runtime['url']: runtime_data,
+                model['url']: model_data,
+                handler['url']: handler_data,
+            }[url]
+
+        with mock.patch('rill_xray_agent.rillml_artifact._http_get', fetch), \
+             mock.patch('rill_xray_agent.rillml_artifact.detect_platform',
+                        return_value={'os': 'linux', 'arch': 'x86_64', 'libc': 'gnu'}), \
+             mock.patch('rill_xray_agent.rillml_artifact.probe_runtime',
+                        return_value=probe) as probe_mock, \
+             tempfile.TemporaryDirectory() as td:
+            mgr = RillMLRuntimeManager(td, public_key_hex=TEST_PUB_HEX,
+                                        trusted_key_id=TEST_KEY_ID,
+                                        expected_release_version='1.5.1')
+            mgr.install(probe='handshake')
+            self.assertEqual(calls['index'], 1)
+            probe_mock.assert_called_once()
+            self.assertEqual(probe_mock.call_args.kwargs['expected_version'], '1.5.1')
+            self.assertEqual(probe_mock.call_args.kwargs['expected_model_version'], '9.0.0')
+            self.assertEqual(probe_mock.call_args.kwargs['expected_handler_version'], '8.0.0')
 
     def test_install_checksum_mismatch_never_activates(self):
         art = runtime_artifact()
