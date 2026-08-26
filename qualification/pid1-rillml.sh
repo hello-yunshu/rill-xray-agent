@@ -126,7 +126,7 @@ assert r.get("supported") and r.get("available"), r
 assert r.get("current") and r.get("current",{}).get("version"), r
 print(r["current"]["version"])'
 }
-EXPECTED_RILL_VERSION=${RILLML_EXPECTED_VERSION:-1.5.1}
+EXPECTED_RILL_VERSION=${RILLML_EXPECTED_VERSION:-1.5.3}
 rillml_version_ok() {
     rillml_status_json | EXPECTED_RILL_VERSION="$EXPECTED_RILL_VERSION" python3 -c 'import json,os,sys
 d=json.load(sys.stdin); r=d.get("result") or d
