@@ -5,7 +5,8 @@ Single source of truth is this Rill repository. The manifest pins every
 payload file Xray consumes (payload mirrors, repository_files scripts,
 systemd units, bundle copies) plus the reproducible bundle digest, so a
 consumer (Xray CI) can byte-verify its installed tree against a pinned
-Rill commit.
+Rill commit. ``canonicalDigest`` is the runtime identity used by
+cross-repository automation; audit-only provenance is deliberately excluded.
 
 Run: python3 scripts/build_canonical_manifest.py          # (re)write manifest
      python3 scripts/build_canonical_manifest.py --check  # verify tree matches
@@ -28,6 +29,16 @@ BUNDLE_NAME = "rill-xray-agent-xray-bundle.tar.gz"
 MANIFEST = INTEGRATION / "CANONICAL_MANIFEST.json"
 BUNDLE_EXCLUDE = {"rill_xray_agent_bootstrap.sh"}
 BUNDLE_TOPS = ("rill_payload", "scripts", "systemd")
+CANONICAL_METADATA_PREFIXES = (
+    "source/PROVENANCE/",
+    "repository_files/rill_payload/PROVENANCE/",
+)
+CANONICAL_DERIVED_PATHS = frozenset({
+    # The deterministic bundle contains the payload provenance for install
+    # auditability.  Its hash is therefore derived from both runtime files and
+    # excluded metadata, so it must not feed back into runtime identity.
+    "repository_files/assets/rill-xray-agent-xray-bundle.tar.gz",
+})
 
 # Top-level source dirs that must be byte-identical to their payload mirrors.
 MIRROR_PAIRS = [
@@ -89,6 +100,23 @@ def hash_tree(root: Path, key_prefix: str, out: dict[str, str]) -> None:
         out[f"{key_prefix}{p.relative_to(root).as_posix()}"] = sha_bytes(p.read_bytes())
 
 
+def canonical_digest(files: dict[str, str]) -> str:
+    """Hash runtime identity while excluding audit/provenance metadata."""
+    identity = {
+        key: value
+        for key, value in files.items()
+        if not any(key.startswith(prefix) for prefix in CANONICAL_METADATA_PREFIXES)
+        and key not in CANONICAL_DERIVED_PATHS
+    }
+    encoded = json.dumps(
+        {"schemaVersion": 1, "files": dict(sorted(identity.items()))},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return sha_bytes(encoded)
+
+
 def compute_manifest() -> dict:
     files: dict[str, str] = {}
     # Mirror sources first (authoritative originals).
@@ -129,6 +157,7 @@ def compute_manifest() -> dict:
         # consumer workflow's RILL_CANONICAL_COMMIT pin (the commit that owns
         # this manifest). Embedding it would be stale or self-referential.
         "bundleSha256": sha_bytes(bundle),
+        "canonicalDigest": canonical_digest(files),
         "files": dict(sorted(files.items())),
     }
 
@@ -178,6 +207,8 @@ def verify() -> int:
         raise SystemExit(f"payload drift vs canonical manifest: {sorted(drift)[:10]}")
     if committed["bundleSha256"] != current["bundleSha256"]:
         raise SystemExit("bundle drift vs canonical manifest")
+    if committed.get("canonicalDigest") != current["canonicalDigest"]:
+        raise SystemExit("canonical digest drift vs canonical manifest")
     check_bundle_copies(committed["bundleSha256"])
     check_bootstrap_pin(committed["bundleSha256"])
     print(f"canonical payload sync passed: {len(committed['files'])} files, "

@@ -12,6 +12,26 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PROVENANCE = ROOT / "PROVENANCE" / "upstream.json"
+BEGIN = b"# BEGIN RILL XRAY AGENT INTEGRATION"
+END = b"# END RILL XRAY AGENT INTEGRATION"
+
+
+def host_surface(blob: bytes) -> bytes:
+    start = blob.find(BEGIN)
+    end_marker = END + b"\n"
+    end = blob.find(end_marker, start)
+    if start < 0 or end < 0:
+        raise SystemExit("Xray Host Contract markers are missing")
+    return blob[start : end + len(end_marker)]
+
+
+def canonical_contract_payload(contract: dict) -> bytes:
+    return json.dumps(
+        {key: value for key, value in contract.items() if key != "digest"},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
 
 
 def main() -> int:
@@ -20,7 +40,8 @@ def main() -> int:
     commit = anchor["reviewedCommit"]
     path = anchor["reviewedInstallScriptPath"]
     expected = anchor["reviewedInstallScriptBlob"]
-    if len(commit) != 40 or len(expected) != 40 or not path:
+    host_digest = anchor["hostContractDigest"]
+    if len(commit) != 40 or len(expected) != 40 or len(host_digest) != 64 or not path:
         raise SystemExit("invalid Xray host-surface provenance anchor")
     url = f"https://raw.githubusercontent.com/{anchor['repository']}/{commit}/{path}"
     request = urllib.request.Request(url, headers={"User-Agent": "rill-xray-agent-provenance/1"})
@@ -38,8 +59,20 @@ def main() -> int:
         raise SystemExit(
             f"Xray host-surface blob drift: {path}@{commit} has {actual}, expected {expected}"
         )
+    contract_url = f"https://raw.githubusercontent.com/{anchor['repository']}/{commit}/repository_files/rill_integration/HOST_CONTRACT.json"
+    request = urllib.request.Request(contract_url, headers={"User-Agent": "rill-xray-agent-provenance/1"})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            contract = json.loads(response.read())
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"unable to verify Xray Host Contract: {exc}") from exc
+    expected_surface = contract.get("hostOwnedFiles", {}).get("install.sh#RILL_XRAY_AGENT_INTEGRATION")
+    actual_surface = hashlib.sha256(host_surface(blob)).hexdigest()
+    actual_contract_digest = hashlib.sha256(canonical_contract_payload(contract)).hexdigest()
+    if expected_surface != actual_surface or actual_contract_digest != host_digest or contract.get("digest") != host_digest:
+        raise SystemExit("Xray Host Contract does not match the reviewed install.sh source")
     print(json.dumps({"repository": anchor["repository"], "commit": commit,
-                      "path": path, "blob": actual}, sort_keys=True))
+                      "path": path, "blob": actual, "hostContractDigest": host_digest}, sort_keys=True))
     print("PASS: reviewed Xray host-owned install surface is byte-anchored")
     return 0
 

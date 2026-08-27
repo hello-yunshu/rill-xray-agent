@@ -11,6 +11,8 @@ integration = root / "integrations/xray_bash_onekey"
 repository_files = integration / "repository_files"
 anchor = json.loads((integration / "UPSTREAM_ANCHOR.json").read_text())
 assert len(anchor["reviewedCommit"]) == 40
+assert re.fullmatch(r"[0-9a-f]{64}", anchor["hostContractDigest"])
+assert anchor["hostContractSchema"] == 1
 required = [
     "repository_files/scripts/rill_xray_agent_manager.sh",
     "repository_files/scripts/rill_xray_agent_install.sh",
@@ -48,6 +50,11 @@ config_src = root / "config/default.json"
 config_dst = repository_files / "rill_payload/config/default.json"
 assert config_dst.is_file(), "payload config missing"
 assert config_dst.read_bytes() == config_src.read_bytes(), "payload config drift: default.json"
+config = json.loads(config_src.read_text())
+integration_config = config["xrayIntegration"]
+assert "reviewedCommit" not in integration_config
+assert integration_config["hostContractSchema"] == anchor["hostContractSchema"]
+assert integration_config["hostContractDigest"] == anchor["hostContractDigest"]
 
 expected_re = re.compile(r"^EXPECTED_SHA256=([0-9a-f]{64})$", re.M)
 bootstrap = (repository_files / "scripts/rill_xray_agent_bootstrap.sh").read_text()

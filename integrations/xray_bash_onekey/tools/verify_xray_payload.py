@@ -35,9 +35,15 @@ def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def verify(xray: Path, manifest: Path, allow_missing_github: bool = True) -> int:
+def verify(xray: Path, manifest: Path, allow_missing_github: bool = True,
+           expected_canonical_digest: str | None = None) -> int:
     m = json.loads(manifest.read_text())
     assert m.get("schemaVersion") == 1, "unsupported manifest schema"
+    assert isinstance(m.get("canonicalDigest"), str), "canonical digest missing"
+    if expected_canonical_digest is not None:
+        assert m["canonicalDigest"] == expected_canonical_digest, (
+            "canonical digest does not match the Xray pin"
+        )
     # No sourceCommit in the manifest: provenance is anchored by the consumer
     # workflow's RILL_CANONICAL_COMMIT pin, not embedded in-file.
     checked = 0
@@ -91,5 +97,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("xray_repo", type=Path)
     parser.add_argument("manifest", type=Path)
+    parser.add_argument("--expected-canonical-digest")
     args = parser.parse_args()
-    raise SystemExit(verify(args.xray_repo.resolve(), args.manifest.resolve()))
+    raise SystemExit(verify(args.xray_repo.resolve(), args.manifest.resolve(),
+                            expected_canonical_digest=args.expected_canonical_digest))
