@@ -24,6 +24,7 @@ from rill_xray_agent.rillml_artifact import (
     RillMLRuntimeManager,
     RillMLUnsupported,
     RillMLValidationError,
+    STABLE_INDEX_URL,
     _semver_key,
     _validate_https_url,
     detect_platform,
@@ -97,6 +98,10 @@ def _patched_artifact(art, data, sha):
 
 
 class Ed25519VerifyTest(unittest.TestCase):
+    def test_production_stable_index_is_immutable_frozen_release(self):
+        self.assertTrue(STABLE_INDEX_URL.endswith('/v1.5.3/stable-index.json'))
+        self.assertNotIn('local-ai-stable', STABLE_INDEX_URL)
+
     def test_sign_verify_roundtrip(self):
         msg = b'stable-index payload bytes'
         sig = rillml_ed25519.sign(TEST_SEED, msg)

@@ -4,7 +4,7 @@
 Spec §45 / §46: this gate is the *remote* counterpart to the offline unit
 tests. It runs inside GitHub Actions and genuinely:
 
-  1. fetches the current ``local-ai-stable/stable-index.json``,
+  1. fetches the audited immutable ``v1.5.3/stable-index.json``,
   2. verifies the Ed25519 signature (pure stdlib verifier),
   3. asserts schema v3 + channel stable,
   4. resolves the runner's Linux x86_64 GNU (or musl in Alpine) artifact,
