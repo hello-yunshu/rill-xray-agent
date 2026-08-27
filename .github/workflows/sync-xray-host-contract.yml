@@ -1,0 +1,98 @@
+name: Sync Xray Host Contract
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 * * * *'
+
+concurrency:
+  group: sync-xray-host-contract
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout Agent main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: agent
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout Xray main
+        uses: actions/checkout@v4
+        with:
+          repository: hello-yunshu/Xray_bash_onekey
+          ref: main
+          path: xray
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify Xray Host Contract from source bytes
+        run: |
+          set -euo pipefail
+          python3 xray/scripts/verify_rill_host_contract.py \
+            --repo xray \
+            --contract xray/repository_files/rill_integration/HOST_CONTRACT.json
+
+      - name: Detect and apply Host Contract drift
+        id: drift
+        run: |
+          set -euo pipefail
+          python3 agent/scripts/sync_xray_host_contract.py \
+            --xray xray \
+            --xray-sha "$(git -C xray rev-parse HEAD)" \
+            --github-output "${GITHUB_OUTPUT}"
+          echo "before=$(git -C agent show HEAD:integrations/xray_bash_onekey/CANONICAL_MANIFEST.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["canonicalDigest"])')" >>"${GITHUB_OUTPUT}"
+          echo "after=$(python3 -c 'import json; print(json.load(open("agent/integrations/xray_bash_onekey/CANONICAL_MANIFEST.json"))["canonicalDigest"])')" >>"${GITHUB_OUTPUT}"
+
+      - name: Run Agent source gates after a real contract change
+        if: steps.drift.outputs.changed == 'true'
+        working-directory: agent
+        run: |
+          set -euo pipefail
+          python3 scripts/run_all_checks.py
+          python3 scripts/verify_xray_upstream_anchor.py
+          git diff --check
+
+      - name: Create and optionally auto-merge Agent PR
+        if: steps.drift.outputs.changed == 'true'
+        working-directory: agent
+        env:
+          AGENT_REPO: hello-yunshu/rill-xray-agent
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          allowed='^((PROVENANCE/upstream\.json)|(config/default\.json)|(PACKAGE_SHA256SUMS)|(integrations/xray_bash_onekey/UPSTREAM_ANCHOR\.json)|(integrations/xray_bash_onekey/CANONICAL_MANIFEST\.json)|(integrations/xray_bash_onekey/repository_files/rill_payload/(config/default\.json|PROVENANCE/upstream\.json))|(integrations/xray_bash_onekey/(assets|repository_files/assets)/rill-xray-agent-xray-bundle\.tar\.gz))$'
+          unexpected=$(git diff --name-only | while IFS= read -r path; do [[ "$path" =~ $allowed ]] || echo "$path"; done)
+          [[ -z "$unexpected" ]] || { echo "unexpected files in automated Agent sync:" >&2; echo "$unexpected" >&2; exit 1; }
+          branch="automation/sync-xray-host-contract-${{ steps.drift.outputs.host_contract_digest }}"
+          git switch -c "$branch"
+          git add -- \
+            PROVENANCE/upstream.json config/default.json PACKAGE_SHA256SUMS \
+            integrations/xray_bash_onekey/UPSTREAM_ANCHOR.json \
+            integrations/xray_bash_onekey/CANONICAL_MANIFEST.json \
+            integrations/xray_bash_onekey/repository_files/rill_payload/config/default.json \
+            integrations/xray_bash_onekey/repository_files/rill_payload/PROVENANCE/upstream.json \
+            integrations/xray_bash_onekey/assets/rill-xray-agent-xray-bundle.tar.gz \
+            integrations/xray_bash_onekey/repository_files/assets/rill-xray-agent-xray-bundle.tar.gz
+          git commit -m "chore(xray): sync host contract ${{ steps.drift.outputs.host_contract_digest }}"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${AGENT_REPO}.git" "HEAD:${branch}"
+          pr_url=$(gh pr create --repo "${AGENT_REPO}" --base main --head "${branch}" \
+            --title "chore(xray): sync host contract ${{ steps.drift.outputs.host_contract_digest }}" \
+            --body "Automated Host Contract convergence.\n\nold host digest: ${{ steps.drift.outputs.old_host_contract_digest }}\nnew host digest: ${{ steps.drift.outputs.host_contract_digest }}\nobserved Xray main SHA: $(git -C ../xray rev-parse HEAD)\nAgent canonical digest before: ${{ steps.drift.outputs.before }}\nAgent canonical digest after: ${{ steps.drift.outputs.after }}\n\nValidation: source gates, PID1-compatible checks, remote anchor verification, and Host Contract source-byte verification.")
+          echo "PR: ${pr_url}"
+          if ! gh pr merge "${pr_url##*/}" --repo "${AGENT_REPO}" --auto --squash; then
+            echo "AWAITING_MERGE_POLICY"
+          fi
