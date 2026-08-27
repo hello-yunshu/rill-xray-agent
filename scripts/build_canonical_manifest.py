@@ -33,6 +33,12 @@ CANONICAL_METADATA_PREFIXES = (
     "source/PROVENANCE/",
     "repository_files/rill_payload/PROVENANCE/",
 )
+CANONICAL_DERIVED_PATHS = frozenset({
+    # The deterministic bundle contains the payload provenance for install
+    # auditability.  Its hash is therefore derived from both runtime files and
+    # excluded metadata, so it must not feed back into runtime identity.
+    "repository_files/assets/rill-xray-agent-xray-bundle.tar.gz",
+})
 
 # Top-level source dirs that must be byte-identical to their payload mirrors.
 MIRROR_PAIRS = [
@@ -100,6 +106,7 @@ def canonical_digest(files: dict[str, str]) -> str:
         key: value
         for key, value in files.items()
         if not any(key.startswith(prefix) for prefix in CANONICAL_METADATA_PREFIXES)
+        and key not in CANONICAL_DERIVED_PATHS
     }
     encoded = json.dumps(
         {"schemaVersion": 1, "files": dict(sorted(identity.items()))},
