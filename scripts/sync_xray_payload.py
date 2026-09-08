@@ -99,22 +99,10 @@ def build_bundle() -> bytes:
     return out.getvalue()
 
 
-def pin_bundle() -> str:
-    """The bundle embeds the bootstrap script whose EXPECTED_SHA256 references the
-    bundle's own digest, so iterate to the fixed point where they agree."""
-    import re
-    for _ in range(16):
-        blob = build_bundle()
-        digest = hashlib.sha256(blob).hexdigest()
-        text = BOOTSTRAP.read_text()
-        current = re.search(r'^EXPECTED_SHA256=([0-9a-f]{64})$', text, flags=re.M)
-        if current and current.group(1) == digest:
-            break
-        text, n = re.subn(r'^EXPECTED_SHA256=([0-9a-f]{64})$', f'EXPECTED_SHA256={digest}',
-                          text, count=1, flags=re.M)
-        if n != 1:
-            raise SystemExit('bootstrap EXPECTED_SHA256 anchor not found')
-        BOOTSTRAP.write_text(text)
+def write_bundle() -> str:
+    """Build the payload once; the caller supplies the expected digest."""
+    blob = build_bundle()
+    digest = hashlib.sha256(blob).hexdigest()
     for path in (ASSETS / BUNDLE_NAME, REPO_FILES / 'assets' / BUNDLE_NAME):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(blob)
@@ -125,7 +113,7 @@ def main() -> None:
     changed = sync_config()
     changed += sync_provenance()
     changed += sync_payload()
-    digest = pin_bundle()
+    digest = write_bundle()
     print('synced payload:')
     for c in changed:
         print('  ', c)

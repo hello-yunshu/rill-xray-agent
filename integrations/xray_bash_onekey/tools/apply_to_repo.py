@@ -213,6 +213,9 @@ rxa_integration_self_check() {
 }
 if [[ -f "$rill_xray_agent_manager" ]]; then
     source "$rill_xray_agent_manager"
+    if ! declare -F rxa_health_label >/dev/null 2>&1; then
+        rxa_health_label() { printf '%s\n' "$(gettext "检测：Rill 组件版本较旧，请更新")"; }
+    fi
 else
     rxa_refresh_summary(){ RILL_XRAY_AGENT_HEADER_STATE='Agent: not installed'; RILL_XRAY_AGENT_HEADER_RUNTIME='Runtime: OFF'; RILL_XRAY_AGENT_HEADER_ROUTE='Route: OFF'; }
     rxa_menu(){ echo 'Rill Xray Agent is not installed. Run the included bootstrap script.'; menu_pause; }

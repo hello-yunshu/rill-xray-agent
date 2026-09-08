@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """Byte-verify an Xray clone's installed payload against the Rill canonical
 manifest pinned at a specific Rill commit.
 
@@ -67,7 +68,7 @@ def verify(xray: Path, manifest: Path, allow_missing_github: bool = True,
             return 1
         checked += 1
 
-    # Bundle + bootstrap pin.
+    # Bundle + explicit-bundle bootstrap contract.
     bundle = xray / "assets" / (ASSETS_BUNDLE := "rill-xray-agent-xray-bundle.tar.gz")
     if not bundle.is_file():
         print(f"MISSING bundle {bundle}", file=sys.stderr)
@@ -78,12 +79,11 @@ def verify(xray: Path, manifest: Path, allow_missing_github: bool = True,
         return 1
     bootstrap = xray / "scripts" / "rill_xray_agent_bootstrap.sh"
     text = bootstrap.read_text()
-    match = re.search(r"^EXPECTED_SHA256=([0-9a-f]{64})$", text, flags=re.M)
-    if not match or match.group(1) != m["bundleSha256"]:
-        print(
-            f"MISSING/DRIFT bootstrap EXPECTED_SHA256 on {xray}",
-            file=sys.stderr,
-        )
+    if "RILL_XRAY_AGENT_BUNDLE_FILE" not in text or "RILL_XRAY_AGENT_BUNDLE_URL" not in text:
+        print("bootstrap does not require an explicit bundle", file=sys.stderr)
+        return 1
+    if "rill-xray-agent/main" in text:
+        print("bootstrap still references mutable rill-xray-agent/main", file=sys.stderr)
         return 1
     print(
         f"xray payload matches canonical manifest {manifest.parent.name}/"
