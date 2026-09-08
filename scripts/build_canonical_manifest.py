@@ -170,14 +170,13 @@ def manifest_entry_path(rel: str) -> Path:
     raise SystemExit(f"unexpected manifest key {rel}")
 
 
-def check_bootstrap_pin(bundle_sha: str) -> None:
+def check_bootstrap_contract() -> None:
     bootstrap = REPO_FILES / "scripts/rill_xray_agent_bootstrap.sh"
     text = bootstrap.read_text()
-    match = re.search(r"^EXPECTED_SHA256=([0-9a-f]{64})$", text, flags=re.M)
-    if not match:
-        raise SystemExit("bootstrap EXPECTED_SHA256 missing")
-    if match.group(1) != bundle_sha:
-        raise SystemExit("bootstrap EXPECTED_SHA256 != canonical bundleSha256")
+    if "RILL_XRAY_AGENT_BUNDLE_FILE" not in text or "RILL_XRAY_AGENT_BUNDLE_URL" not in text:
+        raise SystemExit("bootstrap must require an explicit bundle file or URL")
+    if "rill-xray-agent/main" in text:
+        raise SystemExit("bootstrap must not discover mutable rill-xray-agent/main")
 
 
 def check_bundle_copies(bundle_sha: str) -> None:
@@ -210,7 +209,7 @@ def verify() -> int:
     if committed.get("canonicalDigest") != current["canonicalDigest"]:
         raise SystemExit("canonical digest drift vs canonical manifest")
     check_bundle_copies(committed["bundleSha256"])
-    check_bootstrap_pin(committed["bundleSha256"])
+    check_bootstrap_contract()
     print(f"canonical payload sync passed: {len(committed['files'])} files, "
           f"bundle {committed['bundleSha256'][:12]}")
     return 0

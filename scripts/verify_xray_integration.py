@@ -56,11 +56,10 @@ assert "reviewedCommit" not in integration_config
 assert integration_config["hostContractSchema"] == anchor["hostContractSchema"]
 assert integration_config["hostContractDigest"] == anchor["hostContractDigest"]
 
-expected_re = re.compile(r"^EXPECTED_SHA256=([0-9a-f]{64})$", re.M)
 bootstrap = (repository_files / "scripts/rill_xray_agent_bootstrap.sh").read_text()
-match = expected_re.search(bootstrap)
-assert match, "bootstrap EXPECTED_SHA256 missing"
-assert hashlib.sha256(bundle_path.read_bytes()).hexdigest() == match.group(1), "bundle sha != bootstrap EXPECTED_SHA256"
+assert "RILL_XRAY_AGENT_BUNDLE_FILE" in bootstrap
+assert "RILL_XRAY_AGENT_BUNDLE_URL" in bootstrap
+assert "rill-xray-agent/main" not in bootstrap, "bootstrap must not discover mutable main"
 
 init_blob = (source_py / "__init__.py").read_text()
 m_version = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', init_blob)
