@@ -63,7 +63,9 @@ case "$cmd" in
     status)
         mode=$(cat "${STATE}" 2>/dev/null || printf 'observe-only')
         stage=$(cat "${STAGE}" 2>/dev/null || printf 'observe')
-        printf '{"schemaVersion":1,"ok":true,"command":"status","policy":{"mode":"%s","routeStage":"%s","autoConfirmed":false,"executionEpoch":0}}\\n' "$mode" "$stage"
+        auto=$(cat "${AUTO_STATE}" 2>/dev/null || printf 'false')
+        [[ "$auto" == true ]] || auto=false
+        printf '{"schemaVersion":1,"ok":true,"command":"status","policy":{"mode":"%s","routeStage":"%s","autoConfirmed":%s,"executionEpoch":0}}\\n' "$mode" "$stage" "$auto"
         ;;
     mode)
         if [[ "${RXA_ROOT_POLICY_FAIL:-0}" == 1 ]]; then exit 1; fi
@@ -80,8 +82,14 @@ case "$cmd" in
         printf '%s' "${1:-}" > "${STAGE}" || true
         printf '{"schemaVersion":1,"ok":true,"command":"route-stage"}\\n'
         ;;
-    confirm-auto|revoke-auto|acknowledge-fuse)
+    confirm-auto)
         if [[ "${RXA_ROOT_POLICY_FAIL:-0}" == 1 ]]; then exit 1; fi
+        printf '%s' true > "${AUTO_STATE}"
+        printf '{"schemaVersion":1,"ok":true,"command":"%s"}\\n' "$cmd"
+        ;;
+    revoke-auto|acknowledge-fuse)
+        if [[ "${RXA_ROOT_POLICY_FAIL:-0}" == 1 ]]; then exit 1; fi
+        [[ "$cmd" == revoke-auto ]] && printf '%s' false > "${AUTO_STATE}"
         printf '{"schemaVersion":1,"ok":true,"command":"%s"}\\n' "$cmd"
         ;;
     *) exit 66 ;;
@@ -184,6 +192,8 @@ class ModeTransaction(unittest.TestCase):
         self.root_policy_state.write_text("observe-only")
         self.root_policy_stage_state = self.tmp / "root-policy-stage.state"
         self.root_policy_stage_state.write_text("observe")
+        self.root_policy_auto_state = self.tmp / "root-policy-auto.state"
+        self.root_policy_auto_state.write_text("false")
         self.cli.write_text(CLI_STUB)
         self.observe.write_text(OBSERVE_STUB)
         self.sysctl.write_text(SYSCTL_STUB)
@@ -209,6 +219,7 @@ class ModeTransaction(unittest.TestCase):
                 "RXA_SYS_STATE": str(self.sys_state),
                 "RXA_ROOT_POLICY_STATE": str(self.root_policy_state),
                 "RXA_ROOT_POLICY_STAGE_STATE": str(self.root_policy_stage_state),
+                "AUTO_STATE": str(self.root_policy_auto_state),
             }
         )
 
@@ -438,7 +449,21 @@ class ModeTransaction(unittest.TestCase):
         )
         self.assertEqual(self.apply_auto("apply_auto_confirm"), 0)
         self.assertEqual(self.apply_auto("apply_auto_revoke"), 0)
+        self.assertEqual(self.root_policy_auto_state.read_text(), "false")
         self.assertEqual(self.apply_auto("acknowledge_fuse"), 0)
+
+    def test_upgrade_revoke_clears_root_authoritative_auto_confirmation(self):
+        # Upgrade must revoke the root policy even when the configured mode is
+        # otherwise unchanged; a Runtime-local shadow flag is not sufficient.
+        self.seed_ready_observe("normal")
+        self.config.write_text(
+            json.dumps({"schemaVersion": 1, "mode": "normal", "routeAssistEnabled": False,
+                        "boundedAutoAllowed": False, "routeStage": "auto"})
+        )
+        self.assertEqual(self.apply_auto("apply_auto_confirm"), 0)
+        self.assertEqual(self.root_policy_auto_state.read_text(), "true")
+        self.assertEqual(self.apply_auto("apply_auto_revoke"), 0)
+        self.assertEqual(self.root_policy_auto_state.read_text(), "false")
 
     def test_auto_confirm_fails_closed_on_missing_helper(self):
         self.seed_ready_observe()
