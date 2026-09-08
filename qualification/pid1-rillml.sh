@@ -140,7 +140,17 @@ assert nr.get("status") == "active" and nr.get("verified") is True, nr'
 }
 
 rillml_tree_hash() {
-    find "$RILLML_ROOT" -type f -print0 2>/dev/null | sort -z | xargs -0 sha256sum
+    LC_ALL=C python3 - "$RILLML_ROOT" <<'PY'
+import hashlib
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+for path in sorted((p for p in root.rglob('*') if p.is_file()),
+                   key=lambda p: p.relative_to(root).as_posix()):
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    print(f'{digest}  {path.relative_to(root).as_posix()}')
+PY
 }
 
 root_auto_confirmed() {
@@ -286,6 +296,10 @@ check "stale canonical code removed" bash -c '! test -e /opt/rill-xray-agent/bin
 check "runtime state retained after real upgrade" test -f /var/lib/rill-xray-agent-runtime/upgrade-state-sentinel
 check "timeline/history state retained after real upgrade" test -f /var/lib/rill-xray-agent-xray/history/upgrade-history-sentinel
 check "RillML tree unchanged by real upgrade" bash -c 'rillml_tree_hash >/tmp/rillml-tree-after.sha256 && cmp -s /tmp/rillml-tree-before.sha256 /tmp/rillml-tree-after.sha256'
+if ! cmp -s /tmp/rillml-tree-before.sha256 /tmp/rillml-tree-after.sha256; then
+    echo "--- RillML tree diff ---"
+    diff -u /tmp/rillml-tree-before.sha256 /tmp/rillml-tree-after.sha256 || true
+fi
 check "post-upgrade runtime socket connects" wait_sock "$RUNTIME_SOCK"
 check "post-upgrade agent socket connects" wait_sock "$AGENT_SOCK"
 
