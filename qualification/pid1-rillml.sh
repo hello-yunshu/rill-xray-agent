@@ -144,9 +144,8 @@ check "PID1 is systemd" bash -c '[[ "$(ps -p 1 -o comm=)" == "systemd" ]]'
 
 echo "--- identity: canonical bundle self-consistency (no stale pin) ---"
 bundle_sha=$(sha256sum "$SRC/assets/rill-xray-agent-xray-bundle.tar.gz" | awk '{print $1}')
-expected_sha=$(sed -n 's/^EXPECTED_SHA256=//p' "$SRC/scripts/rill_xray_agent_bootstrap.sh")
-check "bootstrap EXPECTED_SHA256 == bundle sha (drift fails closed)" \
-    bash -c "test -n \"$expected_sha\" && test \"$bundle_sha\" = \"$expected_sha\""
+check "bootstrap requires explicit bundle file/URL and SHA (drift fails closed)" \
+    bash -c "grep -q RILL_XRAY_AGENT_BUNDLE_FILE '$SRC/scripts/rill_xray_agent_bootstrap.sh' && grep -q RILL_XRAY_AGENT_BUNDLE_URL '$SRC/scripts/rill_xray_agent_bootstrap.sh' && grep -q RILL_XRAY_AGENT_BUNDLE_SHA256 '$SRC/scripts/rill_xray_agent_bootstrap.sh' && ! grep -q rill-xray-agent/main '$SRC/scripts/rill_xray_agent_bootstrap.sh'"
 
 echo "=== phase 0: fresh install from canonical payload ==="
 check "unit absent before install" bash -c '! [[ -e /etc/systemd/system/rill-xray-agent-runtime.service ]]'
