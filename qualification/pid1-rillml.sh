@@ -294,7 +294,7 @@ printf 'upgrade-history-sentinel\n' > /var/lib/rill-xray-agent-xray/history/upgr
 printf 'stale-canonical-code\n' > /opt/rill-xray-agent/bin/stale-canonical-code
 rillml_tree_hash >/tmp/rillml-tree-before.sha256
 check "real installer --upgrade" run_real_upgrade
-tail -5 /tmp/rill-upgrade.log
+cat /tmp/rill-upgrade.log
 check "mode preserved after real upgrade" test "$(cfg mode)" = "$upgrade_mode_before"
 check "root auto confirmation revoked after real upgrade" root_auto_revoked
 check "stale canonical code removed" bash -c '! test -e /opt/rill-xray-agent/bin/stale-canonical-code'
