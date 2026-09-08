@@ -139,6 +139,24 @@ nr=d.get("nativeRuntime") or {}
 assert nr.get("status") == "active" and nr.get("verified") is True, nr'
 }
 
+rillml_tree_hash() {
+    find "$RILLML_ROOT" -type f -print0 2>/dev/null | sort -z | xargs -0 sha256sum
+}
+
+root_auto_confirmed() {
+    /opt/rill-xray-agent/bin/rill-xray-agent-root-policy status 2>/dev/null \
+        | python3 -c 'import json,sys; d=json.load(sys.stdin); p=d["policy"]; assert p["autoConfirmed"] is True'
+}
+
+root_auto_revoked() {
+    /opt/rill-xray-agent/bin/rill-xray-agent-root-policy status 2>/dev/null \
+        | python3 -c 'import json,sys; d=json.load(sys.stdin); p=d["policy"]; assert p["autoConfirmed"] is False'
+}
+
+run_real_upgrade() {
+    bash "$SRC/scripts/rill_xray_agent_install.sh" --upgrade >/tmp/rill-upgrade.log 2>&1
+}
+
 echo "=== PID1 suite ==="
 check "PID1 is systemd" bash -c '[[ "$(ps -p 1 -o comm=)" == "systemd" ]]'
 
@@ -249,6 +267,27 @@ check "observation valid after restart" rxa_observe_fresh
 
 echo "=== RillML read-only IPC still consistent after restart ==="
 check "rillml IPC active after restart" rillml_ipc_active
+
+echo "=== real installer upgrade: mode/state preservation + auto revoke ==="
+check "prepare normal mode" rxa_apply_mode normal
+check "prepare auto route stage" rxa_apply_route_stage auto
+check "prepare root auto confirmation" rxa_apply_auto_confirm
+check "root auto confirmation is active before upgrade" root_auto_confirmed
+upgrade_mode_before=$(cfg mode)
+printf 'upgrade-state-sentinel\n' > /var/lib/rill-xray-agent-runtime/upgrade-state-sentinel
+printf 'upgrade-history-sentinel\n' > /var/lib/rill-xray-agent-xray/history/upgrade-history-sentinel
+printf 'stale-canonical-code\n' > /opt/rill-xray-agent/bin/stale-canonical-code
+rillml_tree_hash >/tmp/rillml-tree-before.sha256
+check "real installer --upgrade" run_real_upgrade
+tail -5 /tmp/rill-upgrade.log
+check "mode preserved after real upgrade" test "$(cfg mode)" = "$upgrade_mode_before"
+check "root auto confirmation revoked after real upgrade" root_auto_revoked
+check "stale canonical code removed" bash -c '! test -e /opt/rill-xray-agent/bin/stale-canonical-code'
+check "runtime state retained after real upgrade" test -f /var/lib/rill-xray-agent-runtime/upgrade-state-sentinel
+check "timeline/history state retained after real upgrade" test -f /var/lib/rill-xray-agent-xray/history/upgrade-history-sentinel
+check "RillML tree unchanged by real upgrade" bash -c 'rillml_tree_hash >/tmp/rillml-tree-after.sha256 && cmp -s /tmp/rillml-tree-before.sha256 /tmp/rillml-tree-after.sha256'
+check "post-upgrade runtime socket connects" wait_sock "$RUNTIME_SOCK"
+check "post-upgrade agent socket connects" wait_sock "$AGENT_SOCK"
 
 echo "=== uninstall intent: prepared persisted before host removal ==="
 check "prepare writes intent" uninstall_prepare_then_test
