@@ -169,7 +169,7 @@ root_auto_revoked() {
 }
 
 run_real_upgrade() {
-    bash "$SRC/scripts/rill_xray_agent_install.sh" --upgrade >/tmp/rill-upgrade.log 2>&1
+    bash -x "$SRC/scripts/rill_xray_agent_install.sh" --upgrade >/tmp/rill-upgrade.log 2>&1
 }
 
 echo "=== PID1 suite ==="
