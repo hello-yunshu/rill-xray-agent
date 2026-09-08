@@ -153,6 +153,11 @@ for path in sorted((p for p in root.rglob('*') if p.is_file()),
 PY
 }
 
+rillml_tree_unchanged() {
+    rillml_tree_hash >/tmp/rillml-tree-after.sha256
+    cmp -s /tmp/rillml-tree-before.sha256 /tmp/rillml-tree-after.sha256
+}
+
 root_auto_confirmed() {
     /opt/rill-xray-agent/bin/rill-xray-agent-root-policy status 2>/dev/null \
         | python3 -c 'import json,sys; d=json.load(sys.stdin); p=d["policy"]; assert p["autoConfirmed"] is True'
@@ -295,7 +300,7 @@ check "root auto confirmation revoked after real upgrade" root_auto_revoked
 check "stale canonical code removed" bash -c '! test -e /opt/rill-xray-agent/bin/stale-canonical-code'
 check "runtime state retained after real upgrade" test -f /var/lib/rill-xray-agent-runtime/upgrade-state-sentinel
 check "timeline/history state retained after real upgrade" test -f /var/lib/rill-xray-agent-xray/history/upgrade-history-sentinel
-check "RillML tree unchanged by real upgrade" bash -c 'rillml_tree_hash >/tmp/rillml-tree-after.sha256 && cmp -s /tmp/rillml-tree-before.sha256 /tmp/rillml-tree-after.sha256'
+check "RillML tree unchanged by real upgrade" rillml_tree_unchanged
 if ! cmp -s /tmp/rillml-tree-before.sha256 /tmp/rillml-tree-after.sha256; then
     echo "--- RillML tree diff ---"
     diff -u /tmp/rillml-tree-before.sha256 /tmp/rillml-tree-after.sha256 || true
