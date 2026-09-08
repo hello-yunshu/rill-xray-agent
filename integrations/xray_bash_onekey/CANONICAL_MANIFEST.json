@@ -1,8 +1,8 @@
 {
-  "bundleSha256": "d99d454a59f099e7cc69cd1332d0e0f786136722af62e97bdce6e1998f3ed05a",
-  "canonicalDigest": "461b7c09dac844bf83ac4f29750124c9c06d8b164ba63920fccb158559a057ec",
+  "bundleSha256": "d6342e0d15ce579cbbfe9614dd5c2075ad7913058fadacb74b63f990cd79f57d",
+  "canonicalDigest": "f537bdce26e17fa7ed5555551bb19e1fa9807da52c0b63939f615ee74d3a44c1",
   "files": {
-    "repository_files/assets/rill-xray-agent-xray-bundle.tar.gz": "d99d454a59f099e7cc69cd1332d0e0f786136722af62e97bdce6e1998f3ed05a",
+    "repository_files/assets/rill-xray-agent-xray-bundle.tar.gz": "d6342e0d15ce579cbbfe9614dd5c2075ad7913058fadacb74b63f990cd79f57d",
     "repository_files/rill_payload/PROVENANCE/upstream.json": "d12902aadf7c25264c28072f05ce1e35a0b6bb0654537aed0d42e1cd2957882f",
     "repository_files/rill_payload/bin/rill-xray-agent": "2fa2d791bc2dd9999f83ab99dd9f137b209b883cb4615ee12a6b4269e43d3f08",
     "repository_files/rill_payload/bin/rill-xray-agent-agent": "0fcc5a5ee59d567c167d0664b51141537d33e4f331d7b1ad65364726b104ffd9",
@@ -53,7 +53,7 @@
     "repository_files/rill_payload/systemd/rill-xray-agent-auto-evaluate.service": "0ccf24e08ee2f3e4fbf6a893359c81191edaae16749c2305e2ccbdd84355ca5e",
     "repository_files/rill_payload/systemd/rill-xray-agent-runtime.service": "e1dbfe5e94b9f898f8d40a602c06c0ed98a505e3a275923e846d8e6eac99af09",
     "repository_files/scripts/rill_xray_agent_bootstrap.sh": "d22740d25e27a0b107ba7a125575d15fdf13da6f8ed0179e889f45a16642ccb6",
-    "repository_files/scripts/rill_xray_agent_install.sh": "2a6951d41acbe7d41aaa0f1b3fe75c1984eaf13c2ca0df575f2b695dd3c33b76",
+    "repository_files/scripts/rill_xray_agent_install.sh": "4a4150d9e9a1318e7895ef6bffaeba86f2bb3ee0a222030885e1cbcd50571f5f",
     "repository_files/scripts/rill_xray_agent_manager.sh": "677650ae5715c9e04e845fc90927be852ffd2ed9484fb4c9365f1824c8c0c89e",
     "repository_files/scripts/rill_xray_agent_observe.py": "ad2fcac661a84f8c0604140ea07b9a956a6f34fff09a4ecdb643cc946781fdbb",
     "repository_files/scripts/rill_xray_agent_uninstall.sh": "6d368ad66b8ab3e7b1dcab1e21652c984b6d43bf77971ff703dc04d474ecee8d",
