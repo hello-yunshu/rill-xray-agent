@@ -40,6 +40,9 @@ def git_output(xray: Path, *args: str) -> str:
 
 
 def host_surface(blob: bytes) -> bytes:
+    # The consumer checkout may use CRLF on Windows while GitHub serves the
+    # reviewed source as LF. Hash the logical shell surface identically.
+    blob = blob.replace(b"\r\n", b"\n")
     start = blob.find(BEGIN)
     end_marker = END + b"\n"
     end = blob.find(end_marker, start)
@@ -95,7 +98,7 @@ def main() -> int:
         return 0
 
     reviewed_at = args.reviewed_at or dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
-    reviewed_blob = git_output(xray, "hash-object", "install.sh")
+    reviewed_blob = git_output(xray, "rev-parse", f"{args.xray_sha}:install.sh")
     anchor.update({
         "hostContractDigest": digest,
         "hostContractSchema": contract["schemaVersion"],
