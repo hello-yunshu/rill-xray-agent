@@ -6,7 +6,7 @@ ROOT=Path(__file__).resolve().parents[1]
 mods=sorted(p.stem for p in (ROOT/'tests').glob('test_*.py'))
 seed=int(os.environ.get('RILL_TEST_ORDER_SEED','0'))
 if seed:random.Random(seed).shuffle(mods)
-env=dict(os.environ);env['PYTHONDONTWRITEBYTECODE']='1';env['PYTHONPATH']=str(ROOT/'python')+((':'+env['PYTHONPATH']) if env.get('PYTHONPATH') else '')
+env=dict(os.environ);env['PYTHONDONTWRITEBYTECODE']='1';env['PYTHONPATH']=str(ROOT)+':'+str(ROOT/'python')+((':'+env['PYTHONPATH']) if env.get('PYTHONPATH') else '')
 count=0
 for mod in mods:
  command=[sys.executable,'-m','unittest','-v',mod]

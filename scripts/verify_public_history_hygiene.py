@@ -28,6 +28,11 @@ D. Governance content is ALLOWED: statements like "禁止提交内部提示词",
    "public prompt hygiene", "prompt artifact must not be committed", and
    audit facts describing past findings are policy, not prompt artifacts.
 
+E. Three explicitly retained audit instructions are allowed only at their
+   exact repository paths and only while their normalized SHA-256 matches the
+   reviewed content below. New, renamed, or edited prompt-like documents stay
+   forbidden.
+
 Usage:
   python3 scripts/verify_public_history_hygiene.py [--refs-only]
 """
@@ -40,6 +45,14 @@ import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# Exact audit artifacts retained at the user's direction. Hash LF-normalized
+# bytes so Windows CRLF checkouts have the same identity as Git blobs.
+APPROVED_AUDIT_DOCUMENTS = {
+    "AUDIT_2026-10-05/00-启动修改.md": "80786cb067eb3d1f5d92713c5d1eb7bd989f58a74281f84421d3af1719794f89",
+    "AUDIT_2026-10-05/01-Rill源头运行与升级安全.md": "37f0e0da06ac0963bb6d7c3bae7deb589c2b3abb3b22f05bdc2566c0e72d145a",
+    "AUDIT_2026-10-05/02-Rill源头备份与隐私.md": "37649bdbe38613ccb469ea3ad189a186eeace1f6ad2615337ba5e191179a2721",
+}
 
 # A. Forbidden path fragments (checked on lowercase rel paths).
 FORBIDDEN_PATH_PATTERNS = (
@@ -94,6 +107,14 @@ def forbidden_content(path: Path) -> str | None:
     return None
 
 
+def approved_audit_document(rel: str, raw: bytes) -> bool:
+    expected = APPROVED_AUDIT_DOCUMENTS.get(rel)
+    if expected is None:
+        return False
+    normalized = raw.replace(b"\r\n", b"\n")
+    return hashlib.sha256(normalized).hexdigest() == expected
+
+
 def scan_worktree() -> list[str]:
     problems = []
     for path in sorted(ROOT.rglob("*")):
@@ -108,10 +129,11 @@ def scan_worktree() -> list[str]:
         if forbidden_path(rel):
             problems.append(f"forbidden path: {rel}")
         if path.is_file():
-            blob = hashlib.sha256(path.read_bytes()).hexdigest()
+            raw = path.read_bytes()
+            blob = hashlib.sha256(raw).hexdigest()
             if blob in KNOWN_FORBIDDEN_BLOB_HASHES:
                 problems.append(f"known forbidden blob: {rel}")
-            if not content_exempt and _doc_like(rel):
+            if not content_exempt and _doc_like(rel) and not approved_audit_document(rel, raw):
                 marker = forbidden_content(path)
                 if marker:
                     problems.append(f"prompt-body signature ({marker}): {rel}")
@@ -215,8 +237,9 @@ def refs_scan() -> list[str]:
         tmp = Path(__file__).parent / f".hygiene-blob-{blob_id[:12]}"
         tmp.write_bytes(raw)
         try:
+            approved = approved_audit_document(doc_paths[blob_id], raw)
             marker = forbidden_content(tmp)
-            if marker:
+            if marker and not approved:
                 problems.append(f"prompt-body signature ({marker}) in reachable blob {blob_id[:12]}")
         finally:
             tmp.unlink(missing_ok=True)
