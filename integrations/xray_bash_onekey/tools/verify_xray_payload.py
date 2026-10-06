@@ -33,7 +33,10 @@ TOP_TO_XRAY = {
 
 
 def sha(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    raw = path.read_bytes()
+    if b"\0" not in raw:
+        raw = raw.replace(b"\r\n", b"\n")
+    return hashlib.sha256(raw).hexdigest()
 
 
 def verify(xray: Path, manifest: Path, allow_missing_github: bool = True,
