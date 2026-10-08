@@ -131,7 +131,9 @@ if ((UPGRADE)); then
     if [[ -z "$DESTDIR" ]]; then
         printf '%s\n' "$SAVED_MODE" > "$TXN_DIR/saved-mode"; : > "$BACKUP_DIR/unit-state"
         for unit in rill-xray-agent-runtime.service rill-xray-agent-agent.service rill-xray-agent-xray-observe.path rill-xray-agent-xray-observe.timer rill-xray-agent-apply.path rill-xray-agent-auto-evaluate.path; do
-            enabled=disabled; active=inactive; systemctl is-enabled --quiet "$unit" && enabled=enabled || true; systemctl is-active --quiet "$unit" && active=active || true
+            enabled=disabled; active=inactive
+            if systemctl is-enabled --quiet "$unit"; then enabled=enabled; fi
+            if systemctl is-active --quiet "$unit"; then active=active; fi
             printf '%s %s %s\n' "$unit" "$enabled" "$active" >> "$BACKUP_DIR/unit-state"
         done
     fi

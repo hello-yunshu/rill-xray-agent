@@ -70,7 +70,10 @@ def package_sums() -> None:
         rel = path.relative_to(ROOT)
         if ".git" in rel.parts or "__pycache__" in rel.parts or ".pytest_cache" in rel.parts or "target" in rel.parts:
             continue
-        rows.append((rel.as_posix(), hashlib.sha256(path.read_bytes()).hexdigest()))
+        data = path.read_bytes()
+        if b"\0" not in data:
+            data = data.replace(b"\r\n", b"\n")
+        rows.append((rel.as_posix(), hashlib.sha256(data).hexdigest()))
     sums.write_text("".join(f"{digest}  {rel}\n" for rel, digest in rows))
 
 
