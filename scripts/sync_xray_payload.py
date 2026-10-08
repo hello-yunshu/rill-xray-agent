@@ -7,6 +7,7 @@ Integration systemd units are intentionally NOT mirrored from standalone."""
 import hashlib
 import io
 import shutil
+import subprocess
 import tarfile
 from pathlib import Path
 
@@ -27,6 +28,13 @@ BUNDLE_TOPS = ('rill_payload', 'scripts', 'systemd')
 BUNDLE_EXCLUDE = {'rill_xray_agent_bootstrap.sh'}
 
 
+def canonical_bytes(data: bytes) -> bytes:
+    """Use stable bytes for text across Windows and Linux checkouts."""
+    if b'\0' not in data:
+        return data.replace(b'\r\n', b'\n')
+    return data
+
+
 def sync_config() -> list[str]:
     """Mirror the root config/default.json into the canonical Xray payload.
 
@@ -37,7 +45,8 @@ def sync_config() -> list[str]:
     if not SOURCE_CONFIG.is_file():
         raise SystemExit(f'missing source config: {SOURCE_CONFIG}')
     changed = []
-    if not PAYLOAD_CONFIG.exists() or PAYLOAD_CONFIG.read_bytes() != SOURCE_CONFIG.read_bytes():
+    if (not PAYLOAD_CONFIG.exists()
+            or canonical_bytes(PAYLOAD_CONFIG.read_bytes()) != canonical_bytes(SOURCE_CONFIG.read_bytes())):
         PAYLOAD_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         shutil.copy2(SOURCE_CONFIG, PAYLOAD_CONFIG)
         changed.append('config: default.json')
@@ -53,7 +62,7 @@ def sync_provenance() -> list[str]:
     if not SOURCE_PROVENANCE.is_file():
         raise SystemExit(f'missing source provenance: {SOURCE_PROVENANCE}')
     if (not PAYLOAD_PROVENANCE.exists()
-            or PAYLOAD_PROVENANCE.read_bytes() != SOURCE_PROVENANCE.read_bytes()):
+            or canonical_bytes(PAYLOAD_PROVENANCE.read_bytes()) != canonical_bytes(SOURCE_PROVENANCE.read_bytes())):
         PAYLOAD_PROVENANCE_DIR.mkdir(parents=True, exist_ok=True)
         shutil.copy2(SOURCE_PROVENANCE, PAYLOAD_PROVENANCE)
         return ['provenance: upstream.json']
@@ -65,7 +74,7 @@ def sync_payload() -> list[str]:
     PAYLOAD_PY.mkdir(parents=True, exist_ok=True)
     for src in sorted(SOURCE_PY.glob('*.py')):
         dst = PAYLOAD_PY / src.name
-        if not dst.exists() or dst.read_bytes() != src.read_bytes():
+        if not dst.exists() or canonical_bytes(dst.read_bytes()) != canonical_bytes(src.read_bytes()):
             shutil.copy2(src, dst)
             changed.append(f'payload: {src.name}')
     for stale in sorted(PAYLOAD_PY.glob('*.py')):
@@ -77,6 +86,16 @@ def sync_payload() -> list[str]:
 
 def build_bundle() -> bytes:
     import gzip
+    prefix = REPO_FILES.relative_to(ROOT).as_posix() + "/"
+    git_modes = {}
+    listing = subprocess.check_output(
+        ["git", "ls-files", "--stage", "--", *(prefix + top for top in BUNDLE_TOPS)],
+        cwd=ROOT, text=True
+    )
+    for line in listing.splitlines():
+        metadata, path = line.split("\t", 1)
+        mode, _blob, _stage = metadata.split()
+        git_modes[path.removeprefix(prefix)] = int(mode, 8) & 0o7777
     raw = io.BytesIO()
     with tarfile.open(fileobj=raw, mode='w', format=tarfile.GNU_FORMAT) as tar:
         for top in BUNDLE_TOPS:
@@ -86,11 +105,12 @@ def build_bundle() -> bytes:
                            and not any(v in {'.git', '__pycache__'} for v in p.relative_to(base).parts))
             for p in files:
                 rel = p.relative_to(base).as_posix()
-                data = p.read_bytes()
+                data = canonical_bytes(p.read_bytes())
                 info = tarfile.TarInfo(f'{top}/{rel}')
                 info.size = len(data)
                 info.mtime = 0
-                info.mode = p.stat().st_mode & 0o7777
+                member = f'{top}/{rel}'
+                info.mode = git_modes.get(member, p.stat().st_mode & 0o7777)
                 info.uid = info.gid = 0
                 tar.addfile(info, io.BytesIO(data))
     out = io.BytesIO()

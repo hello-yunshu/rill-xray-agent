@@ -17,6 +17,7 @@ END = b"# END RILL XRAY AGENT INTEGRATION"
 
 
 def host_surface(blob: bytes) -> bytes:
+    blob = blob.replace(b"\r\n", b"\n")
     start = blob.find(BEGIN)
     end_marker = END + b"\n"
     end = blob.find(end_marker, start)

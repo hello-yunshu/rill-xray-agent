@@ -57,7 +57,14 @@ PINNED_SOURCES = [
 
 
 def sha_bytes(blob: bytes) -> str:
-    return hashlib.sha256(blob).hexdigest()
+    return hashlib.sha256(canonical_content(blob)).hexdigest()
+
+
+def canonical_content(blob: bytes) -> bytes:
+    """Make text payload bytes stable across CRLF and LF checkouts."""
+    if b"\0" not in blob:
+        return blob.replace(b"\r\n", b"\n")
+    return blob
 
 
 def subprocess_check(argv: list[str]) -> str:
@@ -65,6 +72,15 @@ def subprocess_check(argv: list[str]) -> str:
 
 
 def build_bundle() -> bytes:
+    git_modes = {}
+    prefix = REPO_FILES.relative_to(ROOT).as_posix() + "/"
+    listing = subprocess_check([
+        "git", "ls-files", "--stage", "--", *(prefix + top for top in BUNDLE_TOPS)
+    ])
+    for line in listing.splitlines():
+        metadata, rel = line.split("\t", 1)
+        mode, _blob, _stage = metadata.split()
+        git_modes[rel.removeprefix(prefix)] = int(mode, 8) & 0o7777
     raw = io.BytesIO()
     with tarfile.open(fileobj=raw, mode="w", format=tarfile.GNU_FORMAT) as tar:
         for top in BUNDLE_TOPS:
@@ -78,11 +94,12 @@ def build_bundle() -> bytes:
             )
             for p in files:
                 rel = p.relative_to(base).as_posix()
-                data = p.read_bytes()
+                data = canonical_content(p.read_bytes())
                 info = tarfile.TarInfo(f"{top}/{rel}")
                 info.size = len(data)
                 info.mtime = 0
-                info.mode = p.stat().st_mode & 0o7777
+                member = f"{top}/{rel}"
+                info.mode = git_modes.get(member, p.stat().st_mode & 0o7777)
                 info.uid = info.gid = 0
                 tar.addfile(info, io.BytesIO(data))
     out = io.BytesIO()

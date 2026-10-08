@@ -71,13 +71,20 @@ def make_index(artifacts, channel='stable'):
     return json.dumps(envelope(payload)).encode()
 
 
+def _fetch_result(data, sink):
+    if sink is None:
+        return data
+    sink.write(data)
+    return {'size': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
+
+
 def make_fetch(byte_map):
     """Build a stand-in for rillml_artifact._http_get serving the given URLs."""
-    def fetch(url, *, timeout, attempts, max_bytes):
+    def fetch(url, *, timeout, attempts, max_bytes, sink=None):
         _validate_https_url(url)
         for suffix, data in byte_map.items():
             if url.endswith(suffix):
-                return data
+                return _fetch_result(data, sink)
         raise RillMLDownloadError(f'no fixture for {url}')
     return fetch
 
@@ -565,15 +572,15 @@ class RuntimeManagerLifecycleTest(unittest.TestCase):
         calls = {'n': 0}
         probe = {'probe': 'lightweight', 'executes': True, 'exitCode': 0}
 
-        def fetch(url, *, timeout, attempts, max_bytes):
+        def fetch(url, *, timeout, attempts, max_bytes, sink=None):
             _validate_https_url(url)
             calls['n'] += 1
             if url.endswith('stable-index.json'):
                 return index1 if calls['n'] < 3 else index2
             if url == v1['url']:
-                return data1
+                return _fetch_result(data1, sink)
             if url == v2['url']:
-                return data2
+                return _fetch_result(data2, sink)
             raise RillMLDownloadError(f'no fixture for {url}')
 
         with mock.patch('rill_xray_agent.rillml_artifact._http_get', fetch), \
@@ -633,16 +640,16 @@ class RuntimeManagerLifecycleTest(unittest.TestCase):
         calls = {'index': 0}
         probe = {'probe': 'handshake', 'executes': True}
 
-        def fetch(url, *, timeout, attempts, max_bytes):
+        def fetch(url, *, timeout, attempts, max_bytes, sink=None):
             _validate_https_url(url)
             if url.endswith('stable-index.json'):
                 calls['index'] += 1
                 return index_a if calls['index'] == 1 else index_b
-            return {
+            return _fetch_result({
                 runtime['url']: runtime_data,
                 model['url']: model_data,
                 handler['url']: handler_data,
-            }[url]
+            }[url], sink)
 
         with mock.patch('rill_xray_agent.rillml_artifact._http_get', fetch), \
              mock.patch('rill_xray_agent.rillml_artifact.detect_platform',
@@ -667,12 +674,12 @@ class RuntimeManagerLifecycleTest(unittest.TestCase):
         index = make_index([patched])
         tampered = b'\x00' * art['size']
 
-        def fetch(u, *, timeout, attempts, max_bytes):
+        def fetch(u, *, timeout, attempts, max_bytes, sink=None):
             _validate_https_url(u)
             if u.endswith('stable-index.json'):
                 return index
             if u == art['url']:
-                return tampered
+                return _fetch_result(tampered, sink)
             raise RillMLDownloadError('no fixture')
 
         with mock.patch('rill_xray_agent.rillml_artifact._http_get', fetch), \
@@ -710,12 +717,12 @@ class RuntimeManagerLifecycleTest(unittest.TestCase):
         index_old = make_index([p1])
         index_new = make_index([p2])
 
-        def fetch(url, *, timeout, attempts, max_bytes):
+        def fetch(url, *, timeout, attempts, max_bytes, sink=None):
             _validate_https_url(url)
             if url.endswith('stable-index.json'):
                 return index_old
             if url == v1['url']:
-                return data1
+                return _fetch_result(data1, sink)
             raise RillMLDownloadError('no fixture')
 
         probe = {'probe': 'lightweight', 'executes': True, 'exitCode': 0}
@@ -733,14 +740,14 @@ class RuntimeManagerLifecycleTest(unittest.TestCase):
             mgr.install(probe='lightweight')  # activates 1.1.0 from index_old
             self.assertEqual(mgr.status()['current']['version'], '1.1.0')
 
-        def fetch2(url, *, timeout, attempts, max_bytes):
+        def fetch2(url, *, timeout, attempts, max_bytes, sink=None):
             _validate_https_url(url)
             if url.endswith('stable-index.json'):
                 return index_new
             if url == v1['url']:
-                return data1
+                return _fetch_result(data1, sink)
             if url == v2['url']:
-                return data2
+                return _fetch_result(data2, sink)
             raise RillMLDownloadError('no fixture')
 
         with mock.patch('rill_xray_agent.rillml_artifact._http_get', fetch2), \
@@ -769,12 +776,12 @@ class RuntimeManagerLifecycleTest(unittest.TestCase):
         patched = _patched_artifact(art, data, sha)
         index = make_index([patched])
 
-        def fetch(url, *, timeout, attempts, max_bytes):
+        def fetch(url, *, timeout, attempts, max_bytes, sink=None):
             _validate_https_url(url)
             if url.endswith('stable-index.json'):
                 return index
             if url == art['url']:
-                return data
+                return _fetch_result(data, sink)
             raise RillMLDownloadError('no fixture')
 
         probe = {'probe': 'lightweight', 'executes': True, 'exitCode': 0}
@@ -798,12 +805,12 @@ class RuntimeManagerLifecycleTest(unittest.TestCase):
         patched = _patched_artifact(art, data, sha)
         index = make_index([patched])
 
-        def fetch(url, *, timeout, attempts, max_bytes):
+        def fetch(url, *, timeout, attempts, max_bytes, sink=None):
             _validate_https_url(url)
             if url.endswith('stable-index.json'):
                 return index
             if url == art['url']:
-                return data
+                return _fetch_result(data, sink)
             raise RillMLDownloadError('no fixture')
 
         probe = {'probe': 'lightweight', 'executes': True, 'exitCode': 0}
@@ -827,12 +834,12 @@ class RuntimeManagerLifecycleTest(unittest.TestCase):
         patched = _patched_artifact(art, data, sha)
         index = make_index([patched])
 
-        def fetch(url, *, timeout, attempts, max_bytes):
+        def fetch(url, *, timeout, attempts, max_bytes, sink=None):
             _validate_https_url(url)
             if url.endswith('stable-index.json'):
                 return index
             if url == art['url']:
-                return data
+                return _fetch_result(data, sink)
             raise RillMLDownloadError('no fixture')
 
         probe = {'probe': 'lightweight', 'executes': True, 'exitCode': 0}
