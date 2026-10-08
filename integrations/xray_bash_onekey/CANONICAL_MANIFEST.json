@@ -1,9 +1,9 @@
 {
-  "bundleSha256": "88f6f4d679da05ed14c016bfac40f67399d61985e2528b05f3c5b3367f71071c",
+  "bundleSha256": "3d9e66dc16429a0a996dcbb29cb32708499102e1517d79fa447b791eb8be16d8",
   "canonicalDigest": "67d65c9b050608937f695bcf2d0f4c04833d25c5718883591c3f38b9772ebfbf",
   "files": {
-    "repository_files/assets/rill-xray-agent-xray-bundle.tar.gz": "88f6f4d679da05ed14c016bfac40f67399d61985e2528b05f3c5b3367f71071c",
-    "repository_files/rill_payload/PROVENANCE/upstream.json": "708566d07043ee6c2e0ace11bfdfe739488d28378f63d111b01f7dd7e1fb13ad",
+    "repository_files/assets/rill-xray-agent-xray-bundle.tar.gz": "3d9e66dc16429a0a996dcbb29cb32708499102e1517d79fa447b791eb8be16d8",
+    "repository_files/rill_payload/PROVENANCE/upstream.json": "05eec3cf250151f69c6e7efca75278242daa40c2f7fea8b6753db6998c64f974",
     "repository_files/rill_payload/bin/rill-xray-agent": "2fa2d791bc2dd9999f83ab99dd9f137b209b883cb4615ee12a6b4269e43d3f08",
     "repository_files/rill_payload/bin/rill-xray-agent-agent": "0fcc5a5ee59d567c167d0664b51141537d33e4f331d7b1ad65364726b104ffd9",
     "repository_files/rill_payload/bin/rill-xray-agent-apply": "0fb8bdddf4b21216ada7a9e2e147e1d8d2d65f39c79fd42241b2ec81be3de163",
@@ -67,7 +67,7 @@
     "repository_files/systemd/rill-xray-agent-xray-observe.path": "95593056919cbbd6c47af94429a947ae07566359cb904513c9ec67e1f82d2cce",
     "repository_files/systemd/rill-xray-agent-xray-observe.service": "f7f3f5702b8976165c7496dbbe63993e27596e3ef9868d517329785d767d6a32",
     "repository_files/systemd/rill-xray-agent-xray-observe.timer": "8d945ef06ade854892c967319e7c5236e2674cca835c47e393d9c7679484642a",
-    "source/PROVENANCE/upstream.json": "708566d07043ee6c2e0ace11bfdfe739488d28378f63d111b01f7dd7e1fb13ad",
+    "source/PROVENANCE/upstream.json": "05eec3cf250151f69c6e7efca75278242daa40c2f7fea8b6753db6998c64f974",
     "source/VERSION": "59854984853104df5c353e2f681a15fc7924742f9a2e468c29af248dce45ce03",
     "source/bin/rill-xray-agent": "2fa2d791bc2dd9999f83ab99dd9f137b209b883cb4615ee12a6b4269e43d3f08",
     "source/bin/rill-xray-agent-agent": "0fcc5a5ee59d567c167d0664b51141537d33e4f331d7b1ad65364726b104ffd9",
