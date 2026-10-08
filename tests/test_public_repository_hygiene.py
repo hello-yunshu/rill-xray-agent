@@ -23,6 +23,19 @@ GOVERNANCE_SNIPPETS = (
 
 
 class Tests(unittest.TestCase):
+    def test_only_pinned_audit_documents_are_exempt(self):
+        from scripts.verify_public_history_hygiene import (
+            APPROVED_AUDIT_DOCUMENTS,
+            approved_audit_document,
+        )
+        for rel, expected in APPROVED_AUDIT_DOCUMENTS.items():
+            raw = (ROOT / rel).read_bytes()
+            normalized = raw.replace(b"\r\n", b"\n")
+            self.assertEqual(hashlib.sha256(normalized).hexdigest(), expected)
+            self.assertTrue(approved_audit_document(rel, raw), rel)
+            self.assertFalse(approved_audit_document(rel + ".copy", raw), rel)
+            self.assertFalse(approved_audit_document(rel, raw + b"edited"), rel)
+
     def test_no_prompt_files_anywhere(self):
         out = subprocess.run(
             [sys.executable, str(SCANNER)],

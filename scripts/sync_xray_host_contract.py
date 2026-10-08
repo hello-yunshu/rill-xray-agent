@@ -11,6 +11,7 @@ import argparse
 import datetime as dt
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -39,7 +40,19 @@ def git_output(xray: Path, *args: str) -> str:
     return subprocess.check_output(("git", "-C", str(xray), *args), text=True).strip()
 
 
+def reviewed_install_blob(xray: Path, commit: str) -> tuple[str, str]:
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise SystemExit("Xray review commit must be a full 40-character SHA")
+    resolved = git_output(xray, "rev-parse", "--verify", f"{commit}^{{commit}}")
+    if resolved != commit:
+        raise SystemExit("Xray review commit did not resolve exactly")
+    return resolved, git_output(xray, "rev-parse", f"{resolved}:install.sh")
+
+
 def host_surface(blob: bytes) -> bytes:
+    # The consumer checkout may use CRLF on Windows while GitHub serves the
+    # reviewed source as LF. Hash the logical shell surface identically.
+    blob = blob.replace(b"\r\n", b"\n")
     start = blob.find(BEGIN)
     end_marker = END + b"\n"
     end = blob.find(end_marker, start)
@@ -57,7 +70,10 @@ def package_sums() -> None:
         rel = path.relative_to(ROOT)
         if ".git" in rel.parts or "__pycache__" in rel.parts or ".pytest_cache" in rel.parts or "target" in rel.parts:
             continue
-        rows.append((rel.as_posix(), hashlib.sha256(path.read_bytes()).hexdigest()))
+        data = path.read_bytes()
+        if b"\0" not in data:
+            data = data.replace(b"\r\n", b"\n")
+        rows.append((rel.as_posix(), hashlib.sha256(data).hexdigest()))
     sums.write_text("".join(f"{digest}  {rel}\n" for rel, digest in rows))
 
 
@@ -69,6 +85,7 @@ def main() -> int:
     parser.add_argument("--github-output", type=Path)
     args = parser.parse_args()
     xray = args.xray.resolve()
+    reviewed_commit, reviewed_blob = reviewed_install_blob(xray, args.xray_sha)
     contract = load(xray / "repository_files/rill_integration/HOST_CONTRACT.json")
     digest = contract.get("digest")
     if contract.get("schemaVersion") != 1 or contract.get("semanticVersion") != 1:
@@ -85,7 +102,9 @@ def main() -> int:
     anchor = load(ANCHOR)
     before = anchor.get("hostContractDigest")
     output = args.github_output.resolve() if args.github_output else None
-    if before == digest:
+    if (before == digest
+            and anchor.get("reviewedCommit") == reviewed_commit
+            and anchor.get("reviewedInstallScriptBlob") == reviewed_blob):
         print("NO_CHANGE")
         if output:
             output.parent.mkdir(parents=True, exist_ok=True)
@@ -95,12 +114,11 @@ def main() -> int:
         return 0
 
     reviewed_at = args.reviewed_at or dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
-    reviewed_blob = git_output(xray, "hash-object", "install.sh")
     anchor.update({
         "hostContractDigest": digest,
         "hostContractSchema": contract["schemaVersion"],
         "reviewedAt": reviewed_at,
-        "reviewedCommit": args.xray_sha,
+        "reviewedCommit": reviewed_commit,
         "reviewedInstallScriptBlob": reviewed_blob,
     })
     write(ANCHOR, anchor)
