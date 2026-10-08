@@ -218,6 +218,10 @@ chmod 2770 /var/spool/rill-xray-agent-apply
 chown root:rill-xray-agent /opt/rill-xray-agent/share/release-capabilities.json
 chmod 0640 /opt/rill-xray-agent/share/release-capabilities.json
 systemctl daemon-reload
+rxa_report_runtime_startup_failure() {
+    systemctl --no-pager --full status rill-xray-agent-runtime.service >&2 || true
+    journalctl --no-pager -u rill-xray-agent-runtime.service -n 80 >&2 || true
+}
 if ((UPGRADE)); then
     # Restart only units that were already active. The new manager below owns
     # the final mode transition; this prevents safe-disabled from being
@@ -258,6 +262,7 @@ if ((UPGRADE)); then
     done
     if (( ! socket_ready )); then
         echo 'Rill 升级失败：Runtime socket 未就绪' >&2
+        rxa_report_runtime_startup_failure
         exit 1
     fi
     # systemd restart is asynchronous on PID1 hosts. Give the new Runtime and
@@ -291,6 +296,7 @@ else
     done
     if (( ! socket_ready )); then
         echo 'Rill 安装失败：Runtime socket 未就绪' >&2
+        rxa_report_runtime_startup_failure
         exit 1
     fi
 
