@@ -1,8 +1,8 @@
 {
-  "bundleSha256": "88f6f4d679da05ed14c016bfac40f67399d61985e2528b05f3c5b3367f71071c",
-  "canonicalDigest": "67d65c9b050608937f695bcf2d0f4c04833d25c5718883591c3f38b9772ebfbf",
+  "bundleSha256": "fe24a6ba89b734b781cf9281c586dafb4c86f4ff315001bb01b059eca1b96678",
+  "canonicalDigest": "f5a948ded1fd99b18918069ce952ab83339d02e77aedff6f9f597c8562f5607f",
   "files": {
-    "repository_files/assets/rill-xray-agent-xray-bundle.tar.gz": "88f6f4d679da05ed14c016bfac40f67399d61985e2528b05f3c5b3367f71071c",
+    "repository_files/assets/rill-xray-agent-xray-bundle.tar.gz": "fe24a6ba89b734b781cf9281c586dafb4c86f4ff315001bb01b059eca1b96678",
     "repository_files/rill_payload/PROVENANCE/upstream.json": "708566d07043ee6c2e0ace11bfdfe739488d28378f63d111b01f7dd7e1fb13ad",
     "repository_files/rill_payload/bin/rill-xray-agent": "2fa2d791bc2dd9999f83ab99dd9f137b209b883cb4615ee12a6b4269e43d3f08",
     "repository_files/rill_payload/bin/rill-xray-agent-agent": "0fcc5a5ee59d567c167d0664b51141537d33e4f331d7b1ad65364726b104ffd9",
@@ -54,7 +54,7 @@
     "repository_files/rill_payload/systemd/rill-xray-agent-runtime.service": "e1dbfe5e94b9f898f8d40a602c06c0ed98a505e3a275923e846d8e6eac99af09",
     "repository_files/scripts/rill_xray_agent_bootstrap.sh": "d22740d25e27a0b107ba7a125575d15fdf13da6f8ed0179e889f45a16642ccb6",
     "repository_files/scripts/rill_xray_agent_install.sh": "58f920b387eaed17e3e06e39b8d42c5bb97d423f7fa44c8e17838772573b5ca7",
-    "repository_files/scripts/rill_xray_agent_manager.sh": "7a02a3c4de8684b3d7530939f00b7643e519502ca8b5c15e710f268858c85570",
+    "repository_files/scripts/rill_xray_agent_manager.sh": "0679cfc2e327ef976c1c6971139a5d7cbf9575b540c19d3eb437e124226a0e09",
     "repository_files/scripts/rill_xray_agent_observe.py": "ad2fcac661a84f8c0604140ea07b9a956a6f34fff09a4ecdb643cc946781fdbb",
     "repository_files/scripts/rill_xray_agent_uninstall.sh": "6d368ad66b8ab3e7b1dcab1e21652c984b6d43bf77971ff703dc04d474ecee8d",
     "repository_files/scripts/rill_xray_agent_verify.sh": "60a51a5b2e48277879dcb0edb68aae23a479d78c362e73f3db4197a29c6e505a",
