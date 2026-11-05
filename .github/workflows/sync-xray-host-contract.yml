@@ -77,7 +77,14 @@ jobs:
           allowed='^((PROVENANCE/upstream\.json)|(config/default\.json)|(PACKAGE_SHA256SUMS)|(integrations/xray_bash_onekey/UPSTREAM_ANCHOR\.json)|(integrations/xray_bash_onekey/CANONICAL_MANIFEST\.json)|(integrations/xray_bash_onekey/repository_files/rill_payload/(config/default\.json|PROVENANCE/upstream\.json))|(integrations/xray_bash_onekey/(assets|repository_files/assets)/rill-xray-agent-xray-bundle\.tar\.gz))$'
           unexpected=$(git diff --name-only | while IFS= read -r path; do [[ "$path" =~ $allowed ]] || echo "$path"; done)
           [[ -z "$unexpected" ]] || { echo "unexpected files in automated Agent sync:" >&2; echo "$unexpected" >&2; exit 1; }
-          branch="automation/sync-xray-host-contract-${{ steps.drift.outputs.host_contract_digest }}"
+          digest='${{ steps.drift.outputs.host_contract_digest }}'
+          existing=$(gh pr list --repo "${AGENT_REPO}" --state open --json number,headRefName \
+            --jq ".[] | select(.headRefName | startswith(\"automation/sync-xray-host-contract-${digest}-\")) | .number" | head -n 1)
+          if [[ -n "$existing" ]]; then
+            echo "Open PR #${existing} already tracks host contract ${digest}; nothing to do."
+            exit 0
+          fi
+          branch="automation/sync-xray-host-contract-${digest}-${{ github.run_id }}-${{ github.run_attempt }}"
           git switch -c "$branch"
           git add -- \
             PROVENANCE/upstream.json config/default.json PACKAGE_SHA256SUMS \
