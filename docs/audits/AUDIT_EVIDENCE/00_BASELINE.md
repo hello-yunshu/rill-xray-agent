@@ -1,6 +1,6 @@
 # 00 Baseline (joint audit, 2026-08-06)
 
-Captured 2026-08-06 21:30 (UTC+8) from live GitHub state. Evidence JSON: `AUDIT_EVIDENCE/00_BASELINE.json`.
+Captured 2026-08-06 21:30 (UTC+8) from live GitHub state. Evidence JSON: `docs/audits/AUDIT_EVIDENCE/00_BASELINE.json`.
 
 ## Rill Xray Agent
 
