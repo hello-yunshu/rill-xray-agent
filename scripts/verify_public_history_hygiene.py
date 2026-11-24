@@ -49,9 +49,15 @@ ROOT = Path(__file__).resolve().parents[1]
 # Exact audit artifacts retained at the user's direction. Hash LF-normalized
 # bytes so Windows CRLF checkouts have the same identity as Git blobs.
 APPROVED_AUDIT_DOCUMENTS = {
+    # Current location.
     "docs/archive/audits/AUDIT_2026-10-05/00-启动修改.md": "80786cb067eb3d1f5d92713c5d1eb7bd989f58a74281f84421d3af1719794f89",
     "docs/archive/audits/AUDIT_2026-10-05/01-Rill源头运行与升级安全.md": "37f0e0da06ac0963bb6d7c3bae7deb589c2b3abb3b22f05bdc2566c0e72d145a",
     "docs/archive/audits/AUDIT_2026-10-05/02-Rill源头备份与隐私.md": "37649bdbe38613ccb469ea3ad189a186eeace1f6ad2615337ba5e191179a2721",
+    # Historical location, still reachable in refs and required for the
+    # history scan; kept to the same reviewed content hashes.
+    "AUDIT_2026-10-05/00-启动修改.md": "80786cb067eb3d1f5d92713c5d1eb7bd989f58a74281f84421d3af1719794f89",
+    "AUDIT_2026-10-05/01-Rill源头运行与升级安全.md": "37f0e0da06ac0963bb6d7c3bae7deb589c2b3abb3b22f05bdc2566c0e72d145a",
+    "AUDIT_2026-10-05/02-Rill源头备份与隐私.md": "37649bdbe38613ccb469ea3ad189a186eeace1f6ad2615337ba5e191179a2721",
 }
 
 # A. Forbidden path fragments (checked on lowercase rel paths).
